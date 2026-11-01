@@ -3,7 +3,8 @@
 输出统一为 RGBA8888。
 
 优先使用 texture2ddecoder（Perfade Texture2DDecoder 的绑定，C 扩展，速度快）；
-若未安装则回退到纯 Python 实现（算法等价，来自 LibSquish，见原项目 THIRD-PARTY-NOTICES.txt）。
+若未安装则回退到纯 Python 实现（算法等价，源自 LibSquish / Xalcon，
+见 THIRD-PARTY-NOTICES.txt）。
 
 函数名对应关系：
     DXT1 -> decode_bc1

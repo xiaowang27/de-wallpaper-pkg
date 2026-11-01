@@ -1,5 +1,7 @@
 # repkg-py
 
+> 解压 wallpaper engine pkg 包
+
 Wallpaper Engine **PKG / TEX** 格式的 Python 解析与解包工具。
 
 参考 C# 项目 [notscuffed/repkg](https://github.com/notscuffed/repkg) 的逆向成果重新实现，
@@ -173,6 +175,10 @@ python -m repkg.cli info E:\path\to\scene.pkg
 ## 许可
 
 本项目是对 [notscuffed/repkg](https://github.com/notscuffed/repkg)（MIT）的重新实现。
-原项目包含来自 **LibSquish** 的第三方代码（见其 `THIRD-PARTY-NOTICES.txt`），
-本项目的 `repkg/core/dxt.py` 中纯 Python 回退实现同样源自 LibSquish 算法，
+
+原项目的 `DXT.cs` 头部注明其解压算法移植自 **LibSquish**
+（<http://code.google.com/p/libsquish/>），原作者为 **Xalcon @ mmowned.com-Forum**。
+本项目的 `repkg/core/dxt.py` 中纯 Python 回退实现沿用同一套算法，
 移植到其它语言时请保留对应的许可声明。
+
+完整的第三方许可声明见 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)。

@@ -41,6 +41,34 @@ RePKG（上游项目）
   完整许可文本见：https://github.com/notscuffed/repkg/blob/master/THIRD-PARTY-NOTICES.txt
 
 ════════════════════════════════════════════════════════════════════
+DXT 解压算法：Xalcon / LibSquish
+════════════════════════════════════════════════════════════════════
+
+  上游 RePKG.Application/Texture/Helpers/DXT.cs 头部注明：
+
+      Copyright (c) <2011> <by Xalcon @ mmowned.com-Forum>
+      // most of the algorithms and data used in this Class-file
+      // has been ported from LibSquish!
+      // http://code.google.com/p/libsquish/
+
+  本项目的 repkg/core/dxt.py 中的纯 Python 回退实现沿用同一套 DXT1/DXT3/
+  DXT5 解压算法（LibSquish 的算法，Xalcon 的移植）。该部分按 MIT 协议使用。
+
+  LibSquish 采用 zlib 许可（与 MIT 兼容）：
+      Copyright (c) 2007-2011 Richard Geldig, akarikv
+      This software is provided 'as-is', without any express or implied
+      warranty.  In no event will the authors be held liable for any damages
+      arising from the use of this software.
+      Permission is granted to anyone to use this software for any purpose,
+      including commercial applications, and to alter it and redistribute it
+      freely, subject to the following restrictions:
+      1. The origin of this software must not be misrepresented; you must not
+         claim that you wrote the original software.
+      2. Altered source versions must be plainly marked as such, and must not
+         be misrepresented as being the original software.
+      3. This notice may not be removed or altered from any source distribution.
+
+════════════════════════════════════════════════════════════════════
 本项目使用的 Python 依赖
 ════════════════════════════════════════════════════════════════════
 
