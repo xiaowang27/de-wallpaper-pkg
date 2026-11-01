@@ -92,7 +92,7 @@
   .wall:hover { transform: translateY(-3px); border-color: var(--accent); }
   .wall.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,156,249,.35); }
   .wall .pick {
-    position: absolute; top: 8px; left: 8px; z-index: 3;
+    position: absolute; top: 8px; right: 8px; z-index: 5;
     width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
     background: rgba(0,0,0,.55); border-radius: 6px; cursor: pointer;
   }
@@ -129,6 +129,8 @@
     background: linear-gradient(90deg, rgba(0,0,0,.72), rgba(0,0,0,0));
     opacity: 0; transform: translateX(-8px);
     transition: opacity .18s, transform .18s;
+    /* 隐藏时完全不可交互，避免看不见的按钮被误点 */
+    pointer-events: none;
   }
   .wall:hover .side { opacity: 1; transform: translateX(0); }
   .wall .side button {
@@ -136,11 +138,12 @@
     font-size: 15px; line-height: 1; display: flex;
     align-items: center; justify-content: center;
     background: var(--accent); color: #fff; border: none; cursor: pointer;
+    pointer-events: none;
   }
+  /* 只有悬停卡片、操作条可见时才允许点击 */
+  .wall:hover .side button { pointer-events: auto; }
   .wall .side button:hover { filter: brightness(1.15); }
   .wall .side button.busy { background: var(--muted); pointer-events: none; }
-  .wall.has-media .side { opacity: 1; transform: translateX(0); }
-  .wall .thumb { padding-left: 42px; }
 
   /* 分页 */
   .pager {
@@ -491,10 +494,10 @@ async function loadProjects() {
           <input type="checkbox" ${selected.has(p.id) ? 'checked' : ''}
                  onchange="toggleSelect('${p.id}', this.checked)">
         </label>
-        <div class="side">
-          <button onclick="doExtract('${p.id}')" title="解包到 ${p.output_dir || 'out/'}">📦</button>
-        </div>
         <div class="thumb" onclick="showPreview('${p.id}')">
+          <div class="side" onclick="event.stopPropagation()">
+            <button onclick="doExtract('${p.id}')" title="解包到 ${p.output_dir || 'out/'}">📦</button>
+          </div>
           ${p.has_preview
             ? (p.preview_type === 'mp4'
                 ? `<video src="/api/preview/${p.id}" autoplay loop muted playsinline></video>`
