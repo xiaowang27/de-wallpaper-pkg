@@ -28,10 +28,17 @@ python -m venv .venv
 # 浏览器打开 http://127.0.0.1:8000
 ```
 
-> **PyCharm 用户**：`File > Settings > Project > Python Interpreter` 选择项目内
-> 的 `.venv\Scripts\python.exe`。
-> 调试入口推荐用 `repkg/cli.py` 的 `main()`（右键 Run），或直接跑
-> `tests/e2e_check.py` 看全链路。
+### PyCharm 启动
+
+1. `File > Open` 选中**项目根目录**（含 `pyproject.toml` 的那层，别选 `repkg/` 子目录）
+2. `Settings > Project > Python Interpreter` → Add Interpreter → Virtualenv → Existing
+   → 选 `<项目根>\.venv\Scripts\python.exe`
+3. 右上角运行配置选 **Web Server**（项目自带），点 ▶️
+
+> ⚠️ Run 配置里 **Parameters 必填** `web --host 127.0.0.1 --port 8000`，
+> 否则 argparse 会报 `the following arguments are required: command`。
+
+完整的图文步骤、调试断点设置、常见问题排查见 **[docs/STARTUP.md](docs/STARTUP.md)**。
 
 ---
 
@@ -56,11 +63,15 @@ repkg-py/
 │   └── cli.py                 命令行入口
 ├── tests/
 │   ├── test_core.py           核心层单元测试（19）
+│   ├── test_cli.py            CLI 各子命令 + argparse 守卫（13）
 │   ├── test_media.py          media 收集行为测试（5）
 │   ├── test_real_asset.py     真实素材 byte-exact 回归测试（6）
 │   ├── test_web.py            Web 业务逻辑测试（TestClient，10）
 │   ├── e2e_check.py           端到端验证（PKG→TEX→PNG）
 │   └── web_check.py           真实 uvicorn + 真实 HTTP 冒烟测试
+├── docs/
+│   └── STARTUP.md             启动方式详解（PyCharm / 命令行 / 作为库）
+├── .idea/runConfigurations/    PyCharm 共享运行配置（Web Server / Tests）
 ├── pyproject.toml
 └── requirements.txt
 ```
@@ -68,7 +79,7 @@ repkg-py/
 ## 测试
 
 ```bash
-# 单元 + 集成测试（40 个）
+# 单元 + 集成测试（53 个）
 ./.venv/Scripts/python.exe -m pytest tests/ -v
 
 # 端到端：解包 -> TEX -> PNG -> tex-json

@@ -2,11 +2,14 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.idea/
 *.egg-info/
 build/
 dist/
 output/
+
+# PyCharm 本地配置（保留可共享的 runConfigurations/）
+.idea/*
+!.idea/runConfigurations/
 
 # 解包输出目录（可含数百 MB 的 4K 视频）
 out/
