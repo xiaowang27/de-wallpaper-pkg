@@ -5,6 +5,10 @@ Wallpaper Engine **PKG / TEX** 格式的 Python 解析与解包工具。
 参考 C# 项目 [notscuffed/repkg](https://github.com/notscuffed/repkg) 的逆向成果重新实现，
 **架构上做了针对 Web 化的改造**：核心解析层与 Web 层完全解耦。
 
+> **致谢与许可**：本项目基于 [notscuffed/repkg](https://github.com/notscuffed/repkg)
+> （MIT License）的格式研究成果实现，遵循 MIT 协议。
+> 详见 [LICENSE](LICENSE) 与 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)。
+
 ---
 
 ## 快速开始
@@ -22,8 +26,8 @@ python -m venv .venv
 # 浏览器打开 http://127.0.0.1:8000
 ```
 
-> **PyCharm 用户**：`File > Settings > Project > Python Interpreter` 选择
-> `E:\projects\repkg-py\.venv\Scripts\python.exe`。
+> **PyCharm 用户**：`File > Settings > Project > Python Interpreter` 选择项目内
+> 的 `.venv\Scripts\python.exe`。
 > 调试入口推荐用 `repkg/cli.py` 的 `main()`（右键 Run），或直接跑
 > `tests/e2e_check.py` 看全链路。
 

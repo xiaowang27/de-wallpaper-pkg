@@ -1,0 +1,64 @@
+第三方组件与致谢
+════════════════════════════════════════════════════════════════════
+
+本项目是 RePKG 的 Python 重新实现。PKG / TEX 格式的解析逻辑、行为约定、
+以及命令行选项设计，均源自 notscuffed 的 RePKG 项目。
+
+════════════════════════════════════════════════════════════════════
+RePKG（上游项目）
+════════════════════════════════════════════════════════════════════
+
+  项目：https://github.com/notscuffed/repkg
+  协议：MIT License
+  作者：notscuffed
+
+  本项目沿用了上游的：
+    · PKG 容器结构（索引表 + 裸数据）
+    · TEX 容器结构（magic / header / images / mipmaps / frames）
+    · LZ4 block 解压方式
+    · 命令行选项命名约定（-i/--ignoreexts、-e/--onlyexts、-s/--singledir 等）
+
+  相比上游，本项目修复了以下问题：
+    · PKG 字符串长度前缀：上游 WriteStringI32Size 使用字符数而非
+      UTF-8 字节数，非 ASCII 路径会损坏整个包。本项目使用字节数。
+    · 增加了 Web 化能力（上传 / 预览 / 下载 / 管理）
+    · media 汇总目录使用硬链接，避免 4K 视频壁纸双倍占用磁盘
+
+════════════════════════════════════════════════════════════════════
+上游 RePKG 所使用的第三方组件
+════════════════════════════════════════════════════════════════════
+
+  上游项目在其 THIRD-PARTY-NOTICES.txt 中声明了以下组件。本项目为
+  独立实现，未直接使用这些组件的代码，但其部分算法思路（尤其是 DXT
+  解压）源自公开资料：
+
+    · DXT Decompression code by Xalcon @ mmowned.com-Forum
+    · K4os.Compression.LZ4 by Milosz Krajewski
+    · ImageSharp by SixLabors
+    · Newtonsoft.Json by JamesNK
+    · CommandLineParser by Giacomo Stelluti Scala
+
+  完整许可文本见：https://github.com/notscuffed/repkg/blob/master/THIRD-PARTY-NOTICES.txt
+
+════════════════════════════════════════════════════════════════════
+本项目使用的 Python 依赖
+════════════════════════════════════════════════════════════════════
+
+  Pillow              HPND License
+  lz4                 BSD 3-Clause
+  texture2ddecoder    MIT License
+  FastAPI             MIT License
+  uvicorn             BSD 3-Clause
+  python-multipart    Apache 2.0
+
+  开发依赖：pytest (MIT)、httpx (BSD 3-Clause)
+
+════════════════════════════════════════════════════════════════════
+测试素材
+════════════════════════════════════════════════════════════════════
+
+  tests/3276927533/ 是 Steam 创意工坊上的公开壁纸工程
+  （https://steamcommunity.com/sharedfiles/filedetails/?id=3276927533），
+  原样保留用于格式回归测试。
+
+  该素材的版权归原作者所有，此处仅作技术验证用途。

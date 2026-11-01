@@ -141,10 +141,14 @@ def build_parser() -> argparse.ArgumentParser:
         "-o", "--output", default=None,
         help="输出目录（默认 <项目根>/out）",
     )
-    p_extract.add_argument("-i", "--ignoreexts", help="排除的扩展名（逗号分隔）")
-    p_extract.add_argument("-e", "--onlyexts", help="只保留的扩展名（逗号分隔）")
-    p_extract.add_argument("-s", "--singledir", action="store_true", help="全部文件放同一目录")
-    p_extract.add_argument("-c", "--copyproject", action="store_true", help="复制 project.json 和预览图")
+    p_extract.add_argument("-i", "--ignoreexts", dest="ignore_exts",
+                           help="排除的扩展名（逗号分隔）")
+    p_extract.add_argument("-e", "--onlyexts", dest="only_exts",
+                           help="只保留的扩展名（逗号分隔）")
+    p_extract.add_argument("-s", "--singledir", dest="single_dir",
+                           action="store_true", help="全部文件放同一目录")
+    p_extract.add_argument("-c", "--copyproject", dest="copy_project",
+                           action="store_true", help="复制 project.json 和预览图")
     p_extract.add_argument("--no-tex-convert", action="store_true", help="不转换 TEX")
     p_extract.add_argument("--no-media", action="store_true", help="不收集图片/视频到 media/ 目录")
     p_extract.add_argument("--overwrite", action="store_true", help="覆盖已有文件")
