@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RePKG - Wallpaper Engine 解包工具</title>
+<style>
+  :root {
+    --bg: #12151c;
+    --panel: #1a1f2b;
+    --panel-2: #222836;
+    --border: #2d3446;
+    --text: #e8ecf4;
+    --muted: #8b95ab;
+    --accent: #4f9cf9;
+    --accent-2: #22c55e;
+    --danger: #ef4444;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+  }
+  header {
+    padding: 16px 24px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 10px 18px; cursor: pointer; color: var(--muted);
+    border: none; background: none; font-size: 14px;
+    border-bottom: 2px solid transparent; transition: all .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* 拖拽区 */
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 48px 24px; text-align: center; cursor: pointer;
+    transition: all .2s; background: var(--panel); margin-bottom: 20px;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: var(--accent); background: var(--panel-2);
+  }
+  .dropzone .icon { font-size: 40px; margin-bottom: 12px; }
+  .dropzone .main { font-size: 16px; margin-bottom: 6px; }
+  .dropzone .hint { color: var(--muted); font-size: 12px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { color: var(--muted); font-size: 12px; }
+  input[type=text], input[type=number] {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 12px; border-radius: 6px; font-size: 13px; min-width: 320px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button {
+    background: var(--accent); color: #fff; border: none; padding: 9px 18px;
+    border-radius: 6px; font-size: 13px; cursor: pointer; transition: filter .15s;
+  }
+  button:hover { filter: brightness(1.12); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  label.check { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
+
+  /* 工程卡片网格 */
+  .grid {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .wall {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: transform .18s, border-color .18s;
+    position: relative;
+  }
+  .wall:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .wall.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,156,249,.35); }
+  .wall .pick {
+    position: absolute; top: 8px; left: 8px; z-index: 3;
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.55); border-radius: 6px; cursor: pointer;
+  }
+  .wall .pick input { cursor: pointer; accent-color: var(--accent); width: 14px; height: 14px; }
+  .wall .thumb {
+    width: 100%; aspect-ratio: 16/9; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; cursor: pointer; position: relative;
+  }
+  .wall .thumb img, .wall .thumb video {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .wall .thumb .ph { color: var(--muted); font-size: 12px; }
+  .wall .thumb .play {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 34px; opacity: 0;
+    background: rgba(0,0,0,.35); transition: opacity .18s;
+  }
+  .wall .thumb:hover .play { opacity: 1; }
+  .wall .info { padding: 12px 14px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .wall .title {
+    font-weight: 600; font-size: 13px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .wall .meta { color: var(--muted); font-size: 11px; }
+  .wall .actions { display: flex; gap: 6px; padding: 0 14px 14px; }
+  .wall .actions button { padding: 6px 10px; font-size: 12px; flex: 1; }
+
+  /* 模态框 */
+  .modal {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,.82); align-items: center; justify-content: center;
+  }
+  .modal.open { display: flex; }
+  .modal .box {
+    background: var(--panel); border-radius: var(--radius); padding: 20px;
+    max-width: 92vw; max-height: 88vh; overflow: auto; width: 1100px;
+  }
+  .modal .bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px;
+  }
+  .modal .bar h3 { margin: 0; font-size: 15px; }
+  .modal img, .modal video { max-width: 100%; border-radius: 6px; display: block; }
+
+  .entries { font-family: Consolas, Monaco, monospace; font-size: 12px; }
+  .entries div {
+    padding: 4px 8px; border-bottom: 1px solid var(--panel-2);
+    display: flex; justify-content: space-between; gap: 16px;
+  }
+  .entries .path { color: var(--text); word-break: break-all; }
+  .entries .len { color: var(--muted); flex-shrink: 0; }
+
+  .log {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; font-family: Consolas, monospace; font-size: 11px;
+    max-height: 260px; overflow: auto; white-space: pre-wrap;
+    color: var(--muted); margin-top: 12px;
+  }
+  .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; }
+  .msg.ok { background: rgba(34,197,94,.12); color: var(--accent-2); border: 1px solid rgba(34,197,94,.3); }
+  .msg.err { background: rgba(239,68,68,.12); color: var(--danger); border: 1px solid rgba(239,68,68,.3); }
+  .empty { color: var(--muted); text-align: center; padding: 40px; font-size: 13px; }
+  .spin { display: inline-block; animation: s 1s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+
+  /* 解包结果里的媒体网格 */
+  .media-box {
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .media-title { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .media-title code {
+    background: var(--bg); padding: 2px 6px; border-radius: 4px;
+    font-size: 11px; color: var(--accent);
+  }
+  .media-grid {
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .media-item {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; position: relative;
+    display: flex; flex-direction: column;
+  }
+  .media-thumb {
+    width: 100%; aspect-ratio: 16/9; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .media-thumb img, .media-thumb video {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .media-info { padding: 8px 9px; }
+  .media-name {
+    font-size: 11px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; margin-bottom: 2px;
+  }
+  .media-size { font-size: 10px; color: var(--muted); }
+  .media-dl {
+    position: absolute; top: 6px; right: 6px;
+    background: rgba(0,0,0,.65); color: #fff; width: 26px; height: 26px;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    text-decoration: none; font-size: 14px; transition: background .15s;
+  }
+  .media-dl:hover { background: var(--accent); }
+
+  /* 工程库工具栏 */
+  .toolbar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px;
+  }
+  .toolbar .sel-count { font-size: 12px; color: var(--muted); min-width: 70px; }
+  button.danger { background: var(--danger); }
+  .wall .info .path {
+    font-family: Consolas, Monaco, monospace; font-size: 10px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    opacity: .75;
+  }
+
+  /* 媒体项按钮组 */
+  .media-btns {
+    position: absolute; top: 6px; right: 6px; display: flex; gap: 4px;
+  }
+  .media-copy {
+    background: rgba(0,0,0,.65); color: #fff; width: 26px; height: 26px;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    border: none; cursor: pointer; font-size: 13px; padding: 0;
+    transition: background .15s;
+  }
+  .media-copy:hover { background: var(--accent); }
+  .media-overlay {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; color: #fff;
+    background: rgba(0,0,0,.55); opacity: 0; transition: opacity .18s;
+    pointer-events: none;
+  }
+  .media-thumb { position: relative; cursor: pointer; }
+  .media-thumb:hover .media-overlay { opacity: 1; }
+
+  /* 轻提示 */
+  .toast {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 11px 20px; border-radius: 8px; font-size: 13px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.45);
+    opacity: 0; pointer-events: none; transition: all .22s; z-index: 200;
+    max-width: 80vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.ok { border-color: rgba(34,197,94,.5); }
+  .toast.err { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RePKG</h1>
+  <span class="sub">Wallpaper Engine PKG / TEX 解包工具</span>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab active" data-tab="upload">拖拽导入</button>
+    <button class="tab" data-tab="scan">目录扫描</button>
+    <button class="tab" data-tab="library">工程库 <span id="count">(0)</span></button>
+  </div>
+
+  <!-- ============ 上传 ============ -->
+  <div class="panel active" id="panel-upload">
+    <div class="dropzone" id="dropzone">
+      <div class="icon">📦</div>
+      <div class="main">拖拽 .pkg 或 .tex 文件到此处</div>
+      <div class="hint">或点击选择文件 · 支持批量</div>
+      <input type="file" id="fileInput" multiple accept=".pkg,.tex" hidden>
+    </div>
+    <div id="uploadMsg"></div>
+  </div>
+
+  <!-- ============ 目录扫描 ============ -->
+  <div class="panel" id="panel-scan">
+    <div class="card">
+      <h2>扫描服务器端目录</h2>
+      <div class="row">
+        <div class="field">
+          <label>目录绝对路径（服务器可访问）</label>
+          <input type="text" id="scanDir" placeholder="E:\\steamapps\\workshop\\content\\123">
+        </div>
+        <div class="field">
+          <label>递归</label>
+          <label class="check"><input type="checkbox" id="scanRecursive" checked> 包含子目录</label>
+        </div>
+        <button id="scanBtn">开始扫描</button>
+      </div>
+      <div class="hint" style="color:var(--muted);font-size:12px;margin-top:10px;">
+        扫描后会递归找出所有 .pkg 文件并注册为工程，可在「工程库」中预览和解包。
+      </div>
+    </div>
+    <div id="scanMsg"></div>
+  </div>
+
+  <!-- ============ 工程库 ============ -->
+  <div class="panel" id="panel-library">
+    <div id="libMsg"></div>
+    <div class="toolbar" id="selToolbar">
+      <label class="check">
+        <input type="checkbox" id="selAll" onchange="toggleSelectAll(this.checked)">
+        全选
+      </label>
+      <span class="sel-count" id="selCount">已选 0 个</span>
+      <label class="check">
+        <input type="checkbox" id="delFiles" checked>
+        同时删除解包的文件
+      </label>
+      <button class="danger" id="delBtn" disabled onclick="deleteSelected()">删除所选</button>
+      <button class="ghost" onclick="loadProjects()">刷新</button>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="libEmpty">还没有导入任何工程</div>
+  </div>
+</main>
+
+<!-- 预览模态框 -->
+<div class="modal" id="modal">
+  <div class="box">
+    <div class="bar">
+      <h3 id="mTitle">预览</h3>
+      <button class="ghost" onclick="closeModal()">关闭</button>
+    </div>
+    <div id="mBody"></div>
+  </div>
+</div>
+
+<!-- 条目模态框 -->
+<div class="modal" id="entriesModal">
+  <div class="box" style="width:820px">
+    <div class="bar">
+      <h3 id="eTitle">包内条目</h3>
+      <button class="ghost" onclick="document.getElementById('entriesModal').classList.remove('open')">关闭</button>
+    </div>
+    <div class="entries" id="eBody"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    $('panel-' + t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'library') loadProjects();
+  };
+});
+
+// ---------- 拖拽上传 ----------
+const dz = $('dropzone');
+dz.onclick = () => $('fileInput').click();
+['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => {
+  ev.preventDefault(); dz.classList.add('dragover');
+}));
+['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => {
+  ev.preventDefault(); dz.classList.remove('dragover');
+}));
+dz.addEventListener('drop', ev => uploadFiles(ev.dataTransfer.files));
+$('fileInput').onchange = e => uploadFiles(e.target.files);
+
+async function uploadFiles(files) {
+  if (!files.length) return;
+  $('uploadMsg').innerHTML = '<div class="msg">上传中 <span class="spin">⟳</span></div>';
+  let ok = 0, fail = 0;
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append('file', f);
+    try {
+      const r = await fetch('/api/upload', { method: 'POST', body: fd });
+      const j = await r.json();
+      if (r.ok && j.ok) ok++; else fail++;
+    } catch (e) { fail++; }
+  }
+  $('uploadMsg').innerHTML = `<div class="msg ${fail ? 'err' : 'ok'}">上传完成：成功 ${ok} 个${fail ? '，失败 ' + fail + ' 个' : ''}</div>`;
+  loadProjects();
+}
+
+// ---------- 目录扫描 ----------
+$('scanBtn').onclick = async () => {
+  const dir = $('scanDir').value.trim();
+  if (!dir) { $('scanMsg').innerHTML = '<div class="msg err">请填写目录路径</div>'; return; }
+  $('scanBtn').disabled = true;
+  $('scanMsg').innerHTML = '<div class="msg">扫描中 <span class="spin">⟳</span></div>';
+  const fd = new FormData();
+  fd.append('directory', dir);
+  fd.append('recursive', $('scanRecursive').checked);
+  try {
+    const r = await fetch('/api/scan', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) {
+      $('scanMsg').innerHTML = `<div class="msg err">${j.detail || '扫描失败'}</div>`;
+    } else {
+      $('scanMsg').innerHTML = `<div class="msg ${j.count ? 'ok' : 'err'}">扫描完成，发现 ${j.count} 个工程</div>`;
+      loadProjects();
+    }
+  } catch (e) {
+    $('scanMsg').innerHTML = '<div class="msg err">请求失败: ' + e + '</div>';
+  }
+  $('scanBtn').disabled = false;
+};
+
+// ---------- 工程库 ----------
+let selected = new Set();
+
+async function loadProjects() {
+  try {
+    const r = await fetch('/api/projects');
+    const j = await r.json();
+    const ps = j.projects || [];
+    $('count').textContent = `(${ps.length})`;
+    $('libEmpty').style.display = ps.length ? 'none' : 'block';
+
+    // 清理已不存在的选中项
+    const ids = new Set(ps.map(p => p.id));
+    for (const id of [...selected]) if (!ids.has(id)) selected.delete(id);
+
+    $('grid').innerHTML = ps.map(p => `
+      <div class="wall ${selected.has(p.id) ? 'sel' : ''}" data-id="${p.id}">
+        <label class="pick" onclick="event.stopPropagation()">
+          <input type="checkbox" ${selected.has(p.id) ? 'checked' : ''}
+                 onchange="toggleSelect('${p.id}', this.checked)">
+        </label>
+        <div class="thumb" onclick="showPreview('${p.id}')">
+          ${p.has_preview
+            ? (p.preview_type === 'mp4'
+                ? `<video src="/api/preview/${p.id}" autoplay loop muted playsinline></video>`
+                : `<img src="/api/preview/${p.id}" loading="lazy">`)
+            : '<span class="ph">无预览</span>'}
+          <div class="play">▶</div>
+        </div>
+        <div class="info">
+          <div class="title" title="${p.title}">${p.title}</div>
+          <div class="meta">${p.entry_count} 个条目 · ${p.source === 'scan' ? '目录扫描' : '上传'}</div>
+          ${p.output_dir ? `<div class="meta path" title="${p.output_dir}">${p.output_dir}</div>` : ''}
+        </div>
+        <div class="actions">
+          <button class="ghost" onclick="showEntries('${p.id}')">条目</button>
+          <button onclick="doExtract('${p.id}')">解包</button>
+        </div>
+      </div>`).join('');
+
+    updateSelUI();
+  } catch (e) { console.error(e); }
+}
+
+function toggleSelect(id, checked) {
+  if (checked) selected.add(id); else selected.delete(id);
+  const card = document.querySelector(`.wall[data-id="${id}"]`);
+  if (card) card.classList.toggle('sel', checked);
+  updateSelUI();
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll('#grid .pick input').forEach(cb => {
+    cb.checked = checked;
+    const id = cb.closest('.wall').dataset.id;
+    if (checked) selected.add(id); else selected.delete(id);
+  });
+  document.querySelectorAll('#grid .wall').forEach(c => c.classList.toggle('sel', checked));
+  updateSelUI();
+}
+
+function updateSelUI() {
+  const n = selected.size;
+  $('selCount').textContent = `已选 ${n} 个`;
+  $('delBtn').disabled = n === 0;
+  const all = document.querySelectorAll('#grid .pick input');
+  const allChecked = all.length > 0 && all.every(cb => cb.checked);
+  $('selAll').checked = allChecked;
+}
+
+async function deleteSelected() {
+  const ids = [...selected];
+  if (!ids.length) return;
+  const withFiles = $('delFiles').checked;
+  const msg = withFiles
+    ? `确定要删除所选的 ${ids.length} 个工程吗？\n\n包含已解包的文件，这些文件会从磁盘永久删除。`
+    : `确定要从列表中移除所选的 ${ids.length} 个工程吗？\n\n（不删除已解包的文件）`;
+  if (!confirm(msg)) return;
+
+  $('delBtn').disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('ids', ids.join(','));
+    fd.append('delete_files', withFiles);
+    const r = await fetch('/api/projects/delete', { method: 'POST', body: fd });
+    const j = await r.json();
+    selected.clear();
+    $('libMsg').innerHTML = `<div class="msg ${j.ok ? 'ok' : 'err'}">
+      已删除 ${j.deleted_count} 个工程${j.not_found.length ? '（' + j.not_found.length + ' 个不存在）' : ''}
+      ${j.deleted.some(d => d.removed_files) ? '<br>同时删除了解包产物' : ''}
+    </div>`;
+    loadProjects();
+  } catch (e) {
+    $('libMsg').innerHTML = '<div class="msg err">删除失败</div>';
+  }
+  $('delBtn').disabled = false;
+}
+
+function showPreview(id) {
+  const el = document.querySelector(`[onclick="showPreview('${id}')"]`);
+  const isVideo = el && el.querySelector('video');
+  $('mTitle').textContent = '预览';
+  $('mBody').innerHTML = isVideo
+    ? `<video src="/api/preview/${id}" autoplay loop controls style="max-height:70vh"></video>`
+    : `<img src="/api/preview/${id}">`;
+  $('modal').classList.add('open');
+}
+function closeModal() { $('modal').classList.remove('open'); }
+$('modal').onclick = e => { if (e.target === $('modal')) closeModal(); };
+
+async function showEntries(id) {
+  $('eTitle').textContent = '包内条目';
+  $('eBody').innerHTML = '<div style="color:var(--muted);padding:8px">加载中...</div>';
+  $('entriesModal').classList.add('open');
+  try {
+    const r = await fetch('/api/entries/' + id);
+    const j = await r.json();
+    $('eTitle').textContent = `包内条目 (${j.entries.length}) · magic=${j.magic}`;
+    $('eBody').innerHTML = j.entries.map(e =>
+      `<div><span class="path">${e.path}</span><span class="len">${e.length} B · ${e.type}</span></div>`
+    ).join('');
+  } catch (e) {
+    $('eBody').innerHTML = '<div style="color:var(--danger)">加载失败</div>';
+  }
+}
+
+async function doExtract(id) {
+  try {
+    const fd = new FormData();
+    fd.append('output_dir', '');
+    const r = await fetch('/api/extract/' + id, { method: 'POST', body: fd });
+    const j = await r.json();
+    $('libMsg').innerHTML = `<div class="msg ${j.ok ? 'ok' : 'err'}">
+      解包到 <code>${j.output_dir}</code><br>
+      文件 ${j.files_written} · 图片 ${j.images_written} · 媒体 ${j.media_count} · 跳过 ${j.skipped}
+      ${j.errors.length ? '<br>错误: ' + j.errors.join('; ') : ''}
+      ${j.media && j.media.length ? renderMedia(j.media) : ''}
+      ${j.log && j.log.length ? '<div class="log">' + j.log.join('\n') + '</div>' : ''}
+    </div>`;
+    loadProjects();
+  } catch (e) {
+    $('libMsg').innerHTML = '<div class="msg err">解包失败</div>';
+  }
+}
+
+function renderMedia(media) {
+  const items = media.map(m => `
+    <div class="media-item">
+      <div class="media-thumb" onclick="revealPath('${m.path}')" title="在文件管理器中查看">
+        ${m.kind === 'video'
+          ? `<video src="${m.url}" muted loop autoplay playsinline></video>`
+          : `<img src="${m.url}" loading="lazy">`}
+        <div class="media-overlay">📂 在文件夹中显示</div>
+      </div>
+      <div class="media-info">
+        <div class="media-name" title="${m.name}">${m.name}</div>
+        <div class="media-size">${(m.size/1024).toFixed(1)} KB · ${m.extension.toUpperCase()}</div>
+      </div>
+      <div class="media-btns">
+        <a class="media-dl" href="${m.url}" download="${m.name}" title="下载">⬇</a>
+        <button class="media-copy" onclick="copyPath('${m.path}')" title="复制路径">📋</button>
+      </div>
+    </div>`).join('');
+  return `<div class="media-box">
+    <div class="media-title">图片 / 视频（${media.length}）· 目录 <code>media/</code> · 点击缩略图可在文件夹中显示</div>
+    <div class="media-grid">${items}</div>
+  </div>`;
+}
+
+// 在系统文件管理器中定位文件
+async function revealPath(path) {
+  try {
+    const fd = new FormData();
+    fd.append('path', path);
+    const r = await fetch('/api/reveal', { method: 'POST', body: fd });
+    const j = await r.json();
+    toast(j.ok ? j.message : '打开失败：' + j.message, j.ok ? 'ok' : 'err');
+  } catch (e) {
+    toast('打开失败', 'err');
+  }
+}
+
+// 复制文件路径到剪贴板
+async function copyPath(path) {
+  try {
+    const fd = new FormData();
+    fd.append('text', path);
+    const r = await fetch('/api/copy', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (j.ok) {
+      toast('路径已复制：' + path, 'ok');
+    } else {
+      // 后端复制失败时，退回到浏览器剪贴板 API
+      try {
+        await navigator.clipboard.writeText(path);
+        toast('路径已复制：' + path, 'ok');
+      } catch (e) {
+        toast('复制失败，路径：' + path, 'err');
+      }
+    }
+  } catch (e) {
+    toast('复制失败', 'err');
+  }
+}
+
+// 轻量提示条
+let toastTimer = null;
+function toast(msg, kind) {
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.className = 'toast show ' + (kind || 'ok');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+loadProjects();
+</script>
+</body>
+</html>

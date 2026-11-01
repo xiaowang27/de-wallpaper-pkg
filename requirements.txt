@@ -1,0 +1,10 @@
+Pillow>=10.0
+lz4>=4.0
+texture2ddecoder>=1.0
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+# 开发依赖
+pytest>=8.0
+httpx>=0.27

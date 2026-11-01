@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+*.egg-info/
+build/
+dist/
+output/
+
+# 解包输出目录（可含数百 MB 的 4K 视频）
+out/

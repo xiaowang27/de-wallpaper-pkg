@@ -1,0 +1,23 @@
+# 默认按文本处理，检出时转为 CRLF（Windows 环境）
+* text=auto
+
+# Python 源码与配置
+*.py    text diff=python
+*.toml  text
+*.txt   text
+*.md    text
+*.html  text
+*.css   text
+*.js    text
+
+# 二进制素材：禁止行尾转换与 diff
+*.pkg   binary
+*.tex   binary
+*.dxs   binary
+*.jpg   binary
+*.jpeg  binary
+*.png   binary
+*.gif   binary
+*.mp4   binary
+*.webp  binary
+*.ico   binary
