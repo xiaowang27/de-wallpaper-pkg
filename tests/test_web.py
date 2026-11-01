@@ -151,6 +151,57 @@ def test_reveal_missing_path(client):
     assert r.json()["ok"] is False
 
 
+def test_reveal_empty_path_returns_error(client):
+    """空路径（既没有 path 也没有 project_id）应返回明确错误，而非 422。
+
+    FastAPI 对必填 Form 字段收到空字符串会当作 missing 报 422，
+    所以 path 必须给默认值。
+    """
+    r = client.post("/api/reveal", data={"path": ""})
+    assert r.status_code == 200
+    assert r.json()["ok"] is False
+    assert "路径" in r.json()["message"]
+
+
+def test_reveal_by_project_id(client, pkg_bytes):
+    """按 project_id 打开该工程的解包输出目录。"""
+    pid = _upload(client, pkg_bytes)
+    client.post(f"/api/extract/{pid}", data={"output_dir": ""})
+
+    r = client.post("/api/reveal", data={"path": "", "project_id": pid})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["ok"] is True
+    assert j["path"]
+
+
+def test_reveal_unknown_project_id(client):
+    """不存在的工程 id 应报错。"""
+    r = client.post("/api/reveal", data={"path": "", "project_id": "nope"})
+    assert r.status_code == 200
+    assert r.json()["ok"] is False
+
+
+def test_projects_expose_extracted_flag(client, pkg_bytes):
+    """工程列表要带 extracted 字段，且解包后为 true。
+
+    这个字段用于前端显示「已解包」，必须在服务重启后依然准确，
+    所以后端按磁盘上的实际产物判断。
+    """
+    pid = _upload(client, pkg_bytes)
+
+    r = client.get("/api/projects")
+    proj = next(p for p in r.json()["projects"] if p["id"] == pid)
+    assert "extracted" in proj
+    assert proj["extracted"] is False
+
+    client.post(f"/api/extract/{pid}", data={"output_dir": ""})
+
+    r = client.get("/api/projects")
+    proj = next(p for p in r.json()["projects"] if p["id"] == pid)
+    assert proj["extracted"] is True
+
+
 def test_copy_to_clipboard(client):
     r = client.post("/api/copy", data={"text": "E:/some/path.png"})
     assert r.status_code == 200

@@ -72,8 +72,21 @@ class Project:
             "description": self.project_json.get("description", ""),
             "author": self.project_json.get("author", ""),
             "output_dir": str(self.output_dir) if self.output_dir else "",
+            "extracted": self.is_extracted(),
             "media": self.media,
         }
+
+    def is_extracted(self) -> bool:
+        """是否已解包。
+
+        output_dir 只在本次会话解包后才有值，服务重启后会丢失，
+        所以这里按磁盘上的实际产物判断，保证标记始终准确。
+        """
+        if self.output_dir is not None and self.output_dir.exists():
+            return True
+        # 回退：按 <输出根>/<工程 id> 找
+        candidate = OUTPUT_DIR / self.id
+        return candidate.exists() and any(candidate.iterdir())
 
 
 # 存储根目录
@@ -485,8 +498,36 @@ async def delete_projects(
 
 
 @app.post("/api/reveal")
-async def reveal(path: str = Form(...)) -> JSONResponse:
-    """在系统文件管理器中定位/打开路径。"""
+async def reveal(
+    path: str = Form(""),
+    project_id: str = Form(""),
+) -> JSONResponse:
+    """在系统文件管理器中定位/打开路径。
+
+    Args:
+        path: 要定位的文件或目录。
+        project_id: 若给定且 path 为空，则打开该工程的解包输出目录。
+
+    注意：path 允许为空字符串。FastAPI 对必填 Form 字段收到空值时
+    会当作 missing 报 422，所以这里给默认值而不是 Form(...)。
+    """
+    # 按工程 id 打开输出目录
+    if project_id and not path:
+        project = _projects.get(project_id)
+        if project is None:
+            return JSONResponse({"ok": False, "message": "工程不存在", "path": ""})
+
+        target = project.output_dir or (OUTPUT_DIR / project.id)
+        if not target.exists():
+            return JSONResponse(
+                {"ok": False, "message": "该工程尚未解包", "path": str(target)}
+            )
+        ok, message = reveal_in_file_manager(target)
+        return JSONResponse({"ok": ok, "message": message, "path": str(target)})
+
+    if not path:
+        return JSONResponse({"ok": False, "message": "未指定路径", "path": ""})
+
     ok, message = reveal_in_file_manager(path)
     return JSONResponse({"ok": ok, "message": message, "path": path})
 

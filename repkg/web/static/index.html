@@ -121,6 +121,47 @@
   .wall .actions { display: flex; gap: 6px; padding: 0 14px 14px; }
   .wall .actions button { padding: 6px 10px; font-size: 12px; flex: 1; }
 
+  /* 卡片左侧竖排操作条：解包按钮常驻左侧，不用滚到卡片底部 */
+  .wall .side {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 42px;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 8px; z-index: 4;
+    background: linear-gradient(90deg, rgba(0,0,0,.72), rgba(0,0,0,0));
+    opacity: 0; transform: translateX(-8px);
+    transition: opacity .18s, transform .18s;
+  }
+  .wall:hover .side { opacity: 1; transform: translateX(0); }
+  .wall .side button {
+    width: 30px; height: 30px; padding: 0; border-radius: 6px;
+    font-size: 15px; line-height: 1; display: flex;
+    align-items: center; justify-content: center;
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+  }
+  .wall .side button:hover { filter: brightness(1.15); }
+  .wall .side button.busy { background: var(--muted); pointer-events: none; }
+  .wall.has-media .side { opacity: 1; transform: translateX(0); }
+  .wall .thumb { padding-left: 42px; }
+
+  /* 分页 */
+  .pager {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; flex-wrap: wrap; margin-top: 20px;
+  }
+  .pager button {
+    min-width: 34px; padding: 6px 10px; font-size: 12px;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+  }
+  .pager button:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+  .pager button:disabled { opacity: .35; cursor: not-allowed; }
+  .pager button.cur {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .pager .info { color: var(--muted); font-size: 12px; margin: 0 6px; }
+  .pager select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 8px; border-radius: 6px; font-size: 12px;
+  }
+
   /* 模态框 */
   .modal {
     display: none; position: fixed; inset: 0; z-index: 100;
@@ -155,6 +196,24 @@
   .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; }
   .msg.ok { background: rgba(34,197,94,.12); color: var(--accent-2); border: 1px solid rgba(34,197,94,.3); }
   .msg.err { background: rgba(239,68,68,.12); color: var(--danger); border: 1px solid rgba(239,68,68,.3); }
+
+  /* 解包结果：固定在底部，工程库再长也能看到结果 */
+  #libMsg.sticky {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    width: min(1080px, 92vw); max-height: 58vh; overflow: auto;
+    z-index: 90; margin: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.55);
+  }
+  #libMsg.sticky .msg { margin-bottom: 0; }
+  #libMsg.sticky .media-box { max-height: 40vh; overflow: auto; }
+  #libMsg .close-result {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 3px 9px; border-radius: 5px;
+    font-size: 12px; cursor: pointer;
+  }
   .empty { color: var(--muted); text-align: center; padding: 40px; font-size: 13px; }
   .spin { display: inline-block; animation: s 1s linear infinite; }
   @keyframes s { to { transform: rotate(360deg); } }
@@ -310,6 +369,7 @@
     </div>
     <div class="grid" id="grid"></div>
     <div class="empty" id="libEmpty">还没有导入任何工程</div>
+    <div class="pager" id="pager"></div>
   </div>
 </main>
 
@@ -403,12 +463,16 @@ $('scanBtn').onclick = async () => {
 
 // ---------- 工程库 ----------
 let selected = new Set();
+let page = 1;          // 当前页码（1 起）
+let pageSize = 12;     // 每页条数
+let allProjects = [];  // 全量工程（分页用）
 
 async function loadProjects() {
   try {
     const r = await fetch('/api/projects');
     const j = await r.json();
     const ps = j.projects || [];
+    allProjects = ps;
     $('count').textContent = `(${ps.length})`;
     $('libEmpty').style.display = ps.length ? 'none' : 'block';
 
@@ -416,12 +480,20 @@ async function loadProjects() {
     const ids = new Set(ps.map(p => p.id));
     for (const id of [...selected]) if (!ids.has(id)) selected.delete(id);
 
-    $('grid').innerHTML = ps.map(p => `
+    const totalPages = Math.max(1, Math.ceil(ps.length / pageSize));
+    if (page > totalPages) page = totalPages;
+    const start = (page - 1) * pageSize;
+    const slice = ps.slice(start, start + pageSize);
+
+    $('grid').innerHTML = slice.map(p => `
       <div class="wall ${selected.has(p.id) ? 'sel' : ''}" data-id="${p.id}">
         <label class="pick" onclick="event.stopPropagation()">
           <input type="checkbox" ${selected.has(p.id) ? 'checked' : ''}
                  onchange="toggleSelect('${p.id}', this.checked)">
         </label>
+        <div class="side">
+          <button onclick="doExtract('${p.id}')" title="解包到 ${p.output_dir || 'out/'}">📦</button>
+        </div>
         <div class="thumb" onclick="showPreview('${p.id}')">
           ${p.has_preview
             ? (p.preview_type === 'mp4'
@@ -437,12 +509,62 @@ async function loadProjects() {
         </div>
         <div class="actions">
           <button class="ghost" onclick="showEntries('${p.id}')">条目</button>
-          <button onclick="doExtract('${p.id}')">解包</button>
+          ${p.extracted
+            ? `<button class="ghost" onclick="openOutDir('${p.id}')">📂 打开目录</button>`
+            : ''}
         </div>
       </div>`).join('');
 
+    renderPager(totalPages);
     updateSelUI();
   } catch (e) { console.error(e); }
+}
+
+function renderPager(totalPages) {
+  const total = allProjects.length;
+  if (total === 0) { $('pager').innerHTML = ''; return; }
+
+  // 页码按钮：当前页附近省略
+  const nums = [];
+  const push = n => { if (!nums.includes(n) && n >= 1 && n <= totalPages) nums.push(n); };
+  push(1); push(2);
+  for (let i = page - 1; i <= page + 1; i++) push(i);
+  push(totalPages - 1); push(totalPages);
+  nums.sort((a, b) => a - b);
+
+  let html = `<button onclick="gotoPage(${page - 1})" ${page === 1 ? 'disabled' : ''}>‹</button>`;
+  let last = 0;
+  for (const n of nums) {
+    if (last && n - last > 1) html += `<span class="info">…</span>`;
+    html += `<button class="${n === page ? 'cur' : ''}" onclick="gotoPage(${n})">${n}</button>`;
+    last = n;
+  }
+  html += `<button onclick="gotoPage(${page + 1})" ${page === totalPages ? 'disabled' : ''}>›</button>`;
+
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+  html += `<span class="info">${from}-${to} / ${total}</span>`;
+  html += `<select onchange="setPageSize(this.value)">${
+    [6, 12, 24, 48, 96].map(n =>
+      `<option value="${n}" ${n === pageSize ? 'selected' : ''}>${n} 条/页</option>`
+    ).join('')
+  }</select>`;
+
+  $('pager').innerHTML = html;
+}
+
+function gotoPage(n) {
+  const totalPages = Math.max(1, Math.ceil(allProjects.length / pageSize));
+  if (n < 1 || n > totalPages) return;
+  page = n;
+  loadProjects();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setPageSize(n) {
+  pageSize = parseInt(n, 10) || 12;
+  page = 1;
+  loadProjects();
 }
 
 function toggleSelect(id, checked) {
@@ -453,6 +575,7 @@ function toggleSelect(id, checked) {
 }
 
 function toggleSelectAll(checked) {
+  // 只作用于当前页显示的卡片
   document.querySelectorAll('#grid .pick input').forEach(cb => {
     cb.checked = checked;
     const id = cb.closest('.wall').dataset.id;
@@ -528,21 +651,49 @@ async function showEntries(id) {
 }
 
 async function doExtract(id) {
+  const btn = document.querySelector(`.wall[data-id="${id}"] .side button`);
+  if (btn) { btn.classList.add('busy'); btn.textContent = '⏳'; }
   try {
     const fd = new FormData();
     fd.append('output_dir', '');
     const r = await fetch('/api/extract/' + id, { method: 'POST', body: fd });
     const j = await r.json();
-    $('libMsg').innerHTML = `<div class="msg ${j.ok ? 'ok' : 'err'}">
+    $('libMsg').innerHTML = `<button class="close-result" onclick="closeResult()">✕</button>
+      <div class="msg ${j.ok ? 'ok' : 'err'}">
       解包到 <code>${j.output_dir}</code><br>
       文件 ${j.files_written} · 图片 ${j.images_written} · 媒体 ${j.media_count} · 跳过 ${j.skipped}
       ${j.errors.length ? '<br>错误: ' + j.errors.join('; ') : ''}
       ${j.media && j.media.length ? renderMedia(j.media) : ''}
       ${j.log && j.log.length ? '<div class="log">' + j.log.join('\n') + '</div>' : ''}
     </div>`;
+    $('libMsg').classList.add('sticky');
+    toast(j.ok ? `解包完成 · ${j.media_count} 个媒体` : '解包失败', j.ok ? 'ok' : 'err');
     loadProjects();
   } catch (e) {
     $('libMsg').innerHTML = '<div class="msg err">解包失败</div>';
+    toast('解包失败', 'err');
+  } finally {
+    if (btn) { btn.classList.remove('busy'); btn.textContent = '📦'; }
+  }
+}
+
+function closeResult() {
+  $('libMsg').innerHTML = '';
+  $('libMsg').classList.remove('sticky');
+}
+
+// 在文件管理器中打开该工程的输出目录
+async function openOutDir(id) {
+  try {
+    const fd = new FormData();
+    fd.append('path', '');
+    fd.append('project_id', id);
+    const r = await fetch('/api/reveal', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (j.ok) toast(j.message || '已打开目录', 'ok');
+    else toast(j.message || '打开失败', 'err');
+  } catch (e) {
+    toast('打开失败', 'err');
   }
 }
 
