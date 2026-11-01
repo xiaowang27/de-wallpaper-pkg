@@ -119,10 +119,14 @@ def cmd_web(args: argparse.Namespace) -> int:
     try:
         import uvicorn
     except ImportError:
-        print("缺少 uvicorn，请先 pip install uvicorn")
+        print("缺少 uvicorn，请先 pip install -r requirements.txt")
         return 1
 
-    from .web.app import app
+    # 直接执行本文件时（IDE 里 Run / python repkg/cli.py），相对导入不可用。
+    if __package__ in (None, ""):
+        from repkg.web.app import app
+    else:
+        from .web.app import app
 
     print(f"启动 Web 服务: http://{args.host}:{args.port}")
     uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)

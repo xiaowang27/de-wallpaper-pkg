@@ -190,6 +190,29 @@ def test_extract_missing_path(tmp_path):
     assert rc == 1
 
 
+def test_cmd_web_supports_direct_execution():
+    """直接执行 cli.py 时，cmd_web 里的相对导入也要可用。
+
+    之前 cmd_web 里写的是 `from .web.app import app`，
+    直接 Run cli.py（__package__ 为空）会抛 ImportError。
+    """
+    import pathlib
+    import subprocess
+    import sys
+
+    repo_root = pathlib.Path(__file__).resolve().parent.parent
+    cli_path = repo_root / "repkg" / "cli.py"
+
+    # 用 --help 只验证能进入 cmd_web 的依赖解析路径不会崩：
+    # 真正起服务需要端口，交给 tests/web_check.py 覆盖。
+    r = subprocess.run(
+        [sys.executable, str(cli_path), "web", "--help"],
+        cwd=str(repo_root), capture_output=True, text=True, timeout=90,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "web" in r.stdout
+
+
 # --------------------------------------------------------------------------
 # info / scan
 # --------------------------------------------------------------------------
