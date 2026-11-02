@@ -8,3 +8,5 @@ python-multipart>=0.0.9
 # 开发依赖
 pytest>=8.0
 httpx>=0.27
+# 前端 UI 验证（tests/ui_check.py）需要连 Chrome DevTools Protocol
+websocket-client>=1.7

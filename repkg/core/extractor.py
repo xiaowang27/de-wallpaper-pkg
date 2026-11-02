@@ -138,8 +138,16 @@ class Extractor:
         pkg_path: Path,
         options: ExtractOptions,
         log: Callable[[str], None] | None = None,
+        progress: Callable[[int, int, str], None] | None = None,
     ) -> ExtractResult:
-        """解包单个 PKG 文件。"""
+        """解包单个 PKG 文件。
+
+        Args:
+            pkg_path: PKG 路径。
+            options: 解包选项。
+            log: 逐条日志回调。
+            progress: 进度回调 (当前序号, 总数, 当前条目路径)。
+        """
         result = ExtractResult()
         emit = log or (lambda _msg: None)
 
@@ -150,7 +158,15 @@ class Extractor:
             return result
 
         output_dir = options.output_dir
-        for entry in self._filter_entries(package.entries, options):
+        entries = list(self._filter_entries(package.entries, options))
+        total = len(entries)
+
+        for index, entry in enumerate(entries, start=1):
+            if progress is not None:
+                try:
+                    progress(index, total, entry.full_path)
+                except Exception:
+                    pass
             self._extract_entry(entry, output_dir, options, result, emit)
 
         return result

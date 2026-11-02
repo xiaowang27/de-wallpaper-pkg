@@ -55,20 +55,25 @@ repkg-py/
 │   │   ├── converter.py       TEX → PNG / GIF / MP4
 │   │   ├── texjson.py         .tex-json 元数据生成
 │   │   ├── extractor.py       高层解包流程编排 + media 收集
+│   │   ├── metadata.py        Wallpaper Engine 元数据（分级 / 类型 / 标签）
+│   │   ├── tasks.py           后台解包任务 + 进度跟踪
+│   │   ├── history.py         扫描目录历史持久化
 │   │   └── paths.py           输出路径配置（<项目根>/out）
 │   ├── web/
 │   │   ├── app.py             FastAPI 应用
 │   │   ├── explorer.py        资源管理器 / 剪贴板集成
-│   │   └── static/index.html  单页前端（拖拽上传 / 目录扫描 / 预览 / 多选删除）
+│   │   └── static/index.html  单页前端（拖拽上传 / 目录扫描 / 预览 / 双侧栏 / 分类筛选）
 │   └── cli.py                 命令行入口
 ├── tests/
 │   ├── test_core.py           核心层单元测试（19）
 │   ├── test_cli.py            CLI 各子命令 + argparse 守卫（13）
 │   ├── test_media.py          media 收集行为测试（5）
 │   ├── test_real_asset.py     真实素材 byte-exact 回归测试（6）
-│   ├── test_web.py            Web 业务逻辑测试（TestClient，10）
+│   ├── test_web.py            Web 业务逻辑测试（TestClient）
+│   ├── test_new_features.py   解包进度 / 分类筛选 / 目录历史测试
 │   ├── e2e_check.py           端到端验证（PKG→TEX→PNG）
-│   └── web_check.py           真实 uvicorn + 真实 HTTP 冒烟测试
+│   ├── web_check.py           真实 uvicorn + 真实 HTTP 冒烟测试
+│   └── ui_check.py            真实 Chrome 无头模式 UI 验证
 ├── docs/
 │   └── STARTUP.md             启动方式详解（PyCharm / 命令行 / 作为库）
 ├── .idea/runConfigurations/    PyCharm 共享运行配置（Web Server / Tests）
@@ -79,7 +84,7 @@ repkg-py/
 ## 测试
 
 ```bash
-# 单元 + 集成测试（53 个）
+# 单元 + 集成测试（83 个）
 ./.venv/Scripts/python.exe -m pytest tests/ -v
 
 # 端到端：解包 -> TEX -> PNG -> tex-json
@@ -87,12 +92,20 @@ repkg-py/
 
 # 真实 uvicorn 服务冒烟（multipart 流式上传）
 ./.venv/Scripts/python.exe tests/web_check.py
+
+# 前端 UI 验证（真实 Chrome 无头模式，需先启动 Web 服务）
+./.venv/Scripts/python.exe tests/ui_check.py
 ```
 
 **真实素材回归**：`tests/3276927533/` 是一个真实的 Wallpaper Engine 工程
 （含中文路径 + 4K 贴图）。`test_real_asset.py` 用它做 **PKG / TEX 逐字节往返比对**——
 这是唯一能证明实现与 Wallpaper Engine 兼容的验证，构造数据只能证明代码自洽。
 样本缺失时该模块自动跳过。
+
+**前端为什么需要真实浏览器**：侧栏遮挡、按钮尺寸、元素重叠这类问题，
+静态检查和 `TestClient` 都验证不了 —— 必须让真实渲染引擎算出实际元素矩形。
+`tests/ui_check.py` 通过 CDP 驱动无头 Chrome，断言元素实际位置、按钮尺寸、
+控制台无 JS 错误。开发新界面时先跑它，能省掉大量「页面白屏」的排查时间。
 
 ---
 
@@ -102,10 +115,13 @@ repkg-py/
 |---|---|---|
 | 拖拽上传 | `POST /api/upload` | 接受 `.pkg` / `.tex`，自动生成预览 |
 | 目录扫描 | `POST /api/scan` | 提交服务器端目录，递归找出所有 `.pkg` |
-| 工程列表 | `GET /api/projects` | 列出所有已注册工程 |
+| 扫描历史 | `GET /api/scan/history` | 记录扫过的目录，点击回填 |
+| 工程列表 | `GET /api/projects` | 列出工程，支持分类筛选 |
 | 预览 | `GET /api/preview/{id}` | PNG / GIF / MP4 |
 | 条目列表 | `GET /api/entries/{id}` | 包内条目 + 大小 + 类型 |
-| 解包 | `POST /api/extract/{id}` | 解包到输出目录 |
+| 解包 | `POST /api/extract/{id}` | 启动解包任务，返回 `task_id` |
+| 任务进度 | `GET /api/task/{id}` | 当前条目 / 总数 / 百分比 / 状态 |
+| 进行中任务 | `GET /api/tasks` | 左侧栏与右侧栏的任务列表 |
 | 批量删除 | `POST /api/projects/delete` | 多选删除，可选连带删除磁盘产物 |
 | 媒体列表 | `GET /api/media/{id}` | 该工程解出的图片/视频 |
 | 媒体下载 | `GET /api/media/{id}/{name}` | 带 `Content-Disposition: attachment` |
@@ -115,16 +131,23 @@ repkg-py/
 前端是**Wallpaper 式预览**：卡片网格 + 16:9 缩略图 + 点击放大 +
 GIF 自动播放 / MP4 静音循环播放。
 
+- **左右双侧栏**：左侧显示**排队/进行中**的解包（进度条 + 当前条目），
+  右侧显示**已完成**的解包（可直接下载 / 复制路径）。同时解包多个时，
+  刚解完的东西一眼就能找到；侧栏展开时主内容自动让位，不会被遮挡
 - **分页展示**：工程库每页 12 条（可调 6/12/24/48/96），页码可点击跳转；
   工程多时不用滚动到底部
 - **解包按钮在卡片左侧**：竖排悬浮条，鼠标移入卡片即显示，
   不用翻到卡片底部才能找到
-- **解包结果固定在底部**：无论在第几页操作，结果面板都悬浮在窗口底部，
-  不会因为在下方操作而看不到
+- **分类筛选**：按 Wallpaper Engine 的**年龄分级**（所有人 / 存疑 / 成熟）、
+  **场景类型**（场景 / 壁纸 / 视频 / 网页）、**作者标签** 和标题关键字筛选，
+  卡片上直接显示分级与类型徽章
+- **扫描目录历史**：扫过的目录记入 `data/scan_history.json`，
+  下次直接点选，不用重新敲路径
 - **多选删除**：卡片左上角复选框，支持全选（只作用于当前页）；
   可选「同时删除解包的文件」（扫描来的工程只删自己的副本，
   **绝不触碰你 Steam 目录里的原始文件**）
-- **媒体操作**：点击缩略图 → 在资源管理器中定位；`📋` 按钮 → 复制路径
+- **媒体操作**：缩略图 → 在资源管理器中定位；**⬇ 下载** / **📋 复制** 是
+  带文字的按钮（不是小图标），不容易点错
 - **打开目录**：已解包的工程显示「📂 打开目录」按钮，直接跳到输出目录
 
 **输出位置**：一律为 `<项目根>/out/<工程名>/`，其中 `media/` 汇总所有图片视频

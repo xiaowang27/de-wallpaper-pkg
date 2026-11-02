@@ -252,13 +252,6 @@
     white-space: nowrap; margin-bottom: 2px;
   }
   .media-size { font-size: 10px; color: var(--muted); }
-  .media-dl {
-    position: absolute; top: 6px; right: 6px;
-    background: rgba(0,0,0,.65); color: #fff; width: 26px; height: 26px;
-    border-radius: 6px; display: flex; align-items: center; justify-content: center;
-    text-decoration: none; font-size: 14px; transition: background .15s;
-  }
-  .media-dl:hover { background: var(--accent); }
 
   /* 工程库工具栏 */
   .toolbar {
@@ -274,17 +267,20 @@
     opacity: .75;
   }
 
-  /* 媒体项按钮组 */
+  /* 媒体项按钮组：常驻显示，带文字，不再是悬停才出现的小图标 */
   .media-btns {
-    position: absolute; top: 6px; right: 6px; display: flex; gap: 4px;
+    position: absolute; top: 6px; right: 6px; display: flex; gap: 5px;
   }
-  .media-copy {
-    background: rgba(0,0,0,.65); color: #fff; width: 26px; height: 26px;
-    border-radius: 6px; display: flex; align-items: center; justify-content: center;
-    border: none; cursor: pointer; font-size: 13px; padding: 0;
-    transition: background .15s;
+  .media-dl, .media-copy {
+    background: rgba(10,12,18,.88); color: #fff;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; padding: 4px 9px; cursor: pointer;
+    text-decoration: none; transition: all .15s; white-space: nowrap;
+    backdrop-filter: blur(3px);
   }
-  .media-copy:hover { background: var(--accent); }
+  .media-dl:hover { background: var(--accent-2); border-color: var(--accent-2); }
+  .media-copy:hover { background: var(--accent); border-color: var(--accent); }
   .media-overlay {
     position: absolute; inset: 0; display: flex; align-items: center;
     justify-content: center; font-size: 12px; color: #fff;
@@ -306,6 +302,179 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.ok { border-color: rgba(34,197,94,.5); }
   .toast.err { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+
+  /* ===== 左右任务侧栏 =====
+     左侧：排队/进行中的解包任务
+     右侧：已完成的解包任务（可直接下载 / 复制路径） */
+  .task-rail {
+    position: fixed; top: 0; bottom: 0; width: 320px;
+    background: var(--panel); z-index: 150;
+    display: flex; flex-direction: column;
+    transition: transform .25s ease;
+  }
+  .task-rail.left {
+    left: 0; border-right: 1px solid var(--border);
+    transform: translateX(-100%);
+    box-shadow: 4px 0 24px rgba(0,0,0,.4);
+  }
+  .task-rail.right {
+    right: 0; border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    box-shadow: -4px 0 24px rgba(0,0,0,.4);
+  }
+  .task-rail.open { transform: translateX(0); }
+
+  /* 侧栏展开时主内容让位，避免被盖住 */
+  body.rail-left-open main { margin-left: 320px; }
+  body.rail-right-open main { margin-right: 320px; }
+  body.rail-left-open main { transition: margin-left .25s ease; }
+  body.rail-right-open main { transition: margin-right .25s ease; }
+
+  .task-rail .rail-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 15px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .task-rail .rail-head h3 {
+    margin: 0; font-size: 13px; display: flex; align-items: center; gap: 7px;
+  }
+  .task-rail .rail-head .n {
+    background: var(--accent); color: #fff; border-radius: 9px;
+    padding: 0 7px; font-size: 11px; font-weight: 600; line-height: 17px;
+  }
+  .task-rail .rail-head button {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 17px; cursor: pointer; padding: 0 4px; line-height: 1;
+  }
+  .task-rail .rail-head button:hover { color: var(--text); filter: none; }
+  .task-rail .rail-body { flex: 1; overflow-y: auto; padding: 11px; }
+  .task-rail .rail-foot {
+    padding: 9px 14px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 11px; flex-shrink: 0;
+  }
+
+  .rail-fab {
+    position: fixed; bottom: 18px; z-index: 151;
+    display: none; align-items: center; gap: 7px;
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 14px; border-radius: 8px;
+    font-size: 13px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.45);
+  }
+  .rail-fab:hover { border-color: var(--accent); }
+  .rail-fab.show { display: flex; }
+  .rail-fab.left { left: 14px; }
+  .rail-fab.right { right: 14px; }
+  .rail-fab .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .rail-fab .dot.ok { background: var(--accent-2); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+  /* 单个任务 */
+  .task {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 11px 12px; margin-bottom: 10px;
+  }
+  .task .t-name {
+    font-size: 12px; font-weight: 600; margin-bottom: 7px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task .t-bar {
+    height: 5px; background: var(--bg); border-radius: 3px;
+    overflow: hidden; margin-bottom: 6px;
+  }
+  .task .t-bar i {
+    display: block; height: 100%; background: var(--accent);
+    border-radius: 3px; transition: width .25s ease;
+  }
+  .task.done .t-bar i { background: var(--accent-2); }
+  .task.error .t-bar i { background: var(--danger); }
+  .task .t-meta {
+    display: flex; justify-content: space-between; gap: 8px;
+    color: var(--muted); font-size: 10.5px;
+  }
+  .task .t-file {
+    color: var(--muted); font-size: 10.5px; margin-top: 5px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: Consolas, Monaco, monospace;
+  }
+  .task .t-err { color: var(--danger); font-size: 11px; margin-top: 5px; }
+
+  /* 已完成任务里的媒体操作 */
+  .task .t-media { margin-top: 9px; }
+  .task .t-mrow {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 0; border-top: 1px solid var(--border);
+  }
+  .task .t-mname {
+    flex: 1; min-width: 0; font-size: 11px; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task .t-mbtns { display: flex; gap: 4px; flex-shrink: 0; }
+  /* 下载 / 复制路径：带文字的按钮，不再是隐晦的小图标 */
+  .task .mbtn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 9px; border-radius: 5px; font-size: 11px;
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); text-decoration: none; cursor: pointer;
+    white-space: nowrap;
+  }
+  .task .mbtn:hover { border-color: var(--accent); color: #fff; background: var(--accent); }
+  .task .mbtn.dl:hover { border-color: var(--accent-2); background: var(--accent-2); }
+  .task .mbtn.cp:hover { border-color: var(--accent); }
+
+  /* ===== 筛选栏 ===== */
+  .filters {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .filters select, .filters input[type=text] {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 10px; border-radius: 6px; font-size: 12px; min-width: 0;
+  }
+  .filters input[type=text] { width: 180px; }
+  .filters select:focus, .filters input:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .filters .f-label { color: var(--muted); font-size: 12px; }
+  .filters .f-reset {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 11px; border-radius: 6px;
+    font-size: 12px; cursor: pointer;
+  }
+  .filters .f-reset:hover { border-color: var(--accent); }
+  .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 4px;
+    font-size: 10px; font-weight: 500; vertical-align: middle;
+    border: 1px solid transparent;
+  }
+  .badge.rating-Everyone { background: rgba(34,197,94,.15); color: #86efac; border-color: rgba(34,197,94,.35); }
+  .badge.rating-Teen { background: rgba(234,179,8,.15); color: #fde047; border-color: rgba(234,179,8,.35); }
+  .badge.rating-Questionable { background: rgba(249,115,22,.15); color: #fdba74; border-color: rgba(249,115,22,.35); }
+  .badge.rating-Mature { background: rgba(239,68,68,.15); color: #fca5a5; border-color: rgba(239,68,68,.35); }
+  .badge.rating-Adult { background: rgba(190,18,60,.18); color: #fda4af; border-color: rgba(190,18,60,.4); }
+  .badge.kind { background: rgba(79,156,249,.15); color: #93c5fd; border-color: rgba(79,156,249,.35); }
+
+  /* ===== 目录历史 ===== */
+  .hist { margin-top: 12px; }
+  .hist .h-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 12px; color: var(--text);
+    border: 1px solid transparent;
+  }
+  .hist .h-item:hover { background: var(--panel-2); border-color: var(--border); }
+  .hist .h-path {
+    flex: 1; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; direction: rtl; text-align: left;
+  }
+  .hist .h-count { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+  .hist .h-del {
+    background: transparent; border: none; color: var(--muted);
+    cursor: pointer; font-size: 14px; padding: 0 4px; flex-shrink: 0;
+  }
+  .hist .h-del:hover { color: var(--danger); filter: none; }
+  .hist-empty { color: var(--muted); font-size: 12px; padding: 8px 2px; }
 </style>
 </head>
 <body>
@@ -350,6 +519,7 @@
       <div class="hint" style="color:var(--muted);font-size:12px;margin-top:10px;">
         扫描后会递归找出所有 .pkg 文件并注册为工程，可在「工程库」中预览和解包。
       </div>
+      <div class="hist" id="scanHistory"></div>
     </div>
     <div id="scanMsg"></div>
   </div>
@@ -357,6 +527,20 @@
   <!-- ============ 工程库 ============ -->
   <div class="panel" id="panel-library">
     <div id="libMsg"></div>
+    <div class="filters">
+      <span class="f-label">分类</span>
+      <select id="filterKind" onchange="applyFilters()">
+        <option value="">全部类型</option>
+      </select>
+      <select id="filterRating" onchange="applyFilters()">
+        <option value="">全部分级</option>
+      </select>
+      <select id="filterTag" onchange="applyFilters()">
+        <option value="">全部标签</option>
+      </select>
+      <input type="text" id="filterKeyword" placeholder="搜索标题…" oninput="debouncedFilter()">
+      <button class="f-reset" onclick="resetFilters()">重置</button>
+    </div>
     <div class="toolbar" id="selToolbar">
       <label class="check">
         <input type="checkbox" id="selAll" onchange="toggleSelectAll(this.checked)">
@@ -397,6 +581,37 @@
     <div class="entries" id="eBody"></div>
   </div>
 </div>
+
+<!-- 左侧任务侧栏：排队 / 进行中的解包 -->
+<div class="task-rail left" id="railLeft">
+  <div class="rail-head">
+    <h3>⏳ 进行中 <span class="n" id="leftCount">0</span></h3>
+    <button onclick="toggleRail('left', false)" title="收起">✕</button>
+  </div>
+  <div class="rail-body" id="railLeftBody">
+    <div class="hist-empty">暂无进行中的任务</div>
+  </div>
+  <div class="rail-foot">解包在后台进行，可继续浏览其它工程</div>
+</div>
+
+<!-- 右侧任务侧栏：已完成的解包 -->
+<div class="task-rail right" id="railRight">
+  <div class="rail-head">
+    <h3>✅ 已完成 <span class="n" id="rightCount">0</span></h3>
+    <button onclick="toggleRail('right', false)" title="收起">✕</button>
+  </div>
+  <div class="rail-body" id="railRightBody">
+    <div class="hist-empty">暂无已完成的解包</div>
+  </div>
+  <div class="rail-foot">点击「下载」保存文件，「复制」获取完整路径</div>
+</div>
+
+<button class="rail-fab left" id="fabLeft" onclick="toggleRail('left', true)">
+  <span class="dot"></span><span id="fabLeftText">解包中</span>
+</button>
+<button class="rail-fab right" id="fabRight" onclick="toggleRail('right', true)">
+  <span class="dot ok"></span><span id="fabRightText">已完成</span>
+</button>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -456,6 +671,7 @@ $('scanBtn').onclick = async () => {
       $('scanMsg').innerHTML = `<div class="msg err">${j.detail || '扫描失败'}</div>`;
     } else {
       $('scanMsg').innerHTML = `<div class="msg ${j.count ? 'ok' : 'err'}">扫描完成，发现 ${j.count} 个工程</div>`;
+      if (j.history) renderHistory(j.history);
       loadProjects();
     }
   } catch (e) {
@@ -464,19 +680,130 @@ $('scanBtn').onclick = async () => {
   $('scanBtn').disabled = false;
 };
 
+// ---------- 目录历史 ----------
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/scan/history');
+    const j = await r.json();
+    renderHistory(j.history || []);
+  } catch (e) { /* 历史是便利功能，失败不影响主流程 */ }
+}
+
+function renderHistory(items) {
+  const el = $('scanHistory');
+  if (!items || !items.length) {
+    el.innerHTML = '<div class="hist-empty">暂无扫描记录</div>';
+    return;
+  }
+  // 用 JSON.stringify 生成 JS 字符串字面量，安全处理引号/反斜杠
+  const lit = s => JSON.stringify(String(s));
+  el.innerHTML = `<div class="f-label" style="margin-bottom:6px;">扫描历史</div>` +
+    items.map(h => `
+      <div class="h-item" onclick="useHistoryPath(${lit(h.path)})">
+        <span class="h-path" title="${h.path}">${h.path}</span>
+        ${h.count ? `<span class="h-count">${h.count}</span>` : ''}
+        <button class="h-del" title="删除记录"
+                onclick="event.stopPropagation();deleteHistory(${lit(h.path)})">✕</button>
+      </div>`).join('');
+}
+
+function useHistoryPath(path) {
+  $('scanDir').value = path;
+  $('scanDir').focus();
+}
+
+async function deleteHistory(path) {
+  try {
+    const fd = new FormData();
+    fd.append('path', path);
+    const r = await fetch('/api/scan/history/delete', { method: 'POST', body: fd });
+    const j = await r.json();
+    renderHistory(j.history || []);
+  } catch (e) { /* 忽略 */ }
+}
+
 // ---------- 工程库 ----------
 let selected = new Set();
 let page = 1;          // 当前页码（1 起）
 let pageSize = 12;     // 每页条数
 let allProjects = [];  // 全量工程（分页用）
+let filterOptions = { kinds: [], ratings: [], tags: [] };
+
+// 筛选条件
+const filters = { kind: '', rating: '', tag: '', keyword: '' };
+let filterTimer = null;
+
+function applyFilters() {
+  filters.kind = $('filterKind').value;
+  filters.rating = $('filterRating').value;
+  filters.tag = $('filterTag').value;
+  page = 1;
+  loadProjects();
+}
+
+function debouncedFilter() {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => {
+    filters.keyword = $('filterKeyword').value.trim();
+    page = 1;
+    loadProjects();
+  }, 300);
+}
+
+function resetFilters() {
+  $('filterKind').value = '';
+  $('filterRating').value = '';
+  $('filterTag').value = '';
+  $('filterKeyword').value = '';
+  filters.kind = filters.rating = filters.tag = filters.keyword = '';
+  page = 1;
+  loadProjects();
+}
+
+// 用后端返回的可选值填充下拉框
+function renderFilterOptions(opts) {
+  filterOptions = opts || { kinds: [], ratings: [], tags: [] };
+
+  // 类型 / 分级的中文名（后端已归一化大小写）
+  const KIND_LABELS = {
+    scene: '场景', wallpaper: '壁纸', video: '视频', web: '网页',
+  };
+  const RATING_LABELS = {
+    Everyone: '所有人', Teen: '青少年',
+    Questionable: '存疑', Mature: '成熟', Adult: '成人',
+  };
+
+  const fill = (el, values, labels, current) => {
+    const keep = el.value;
+    // labels.map 是「值 -> 中文名」映射表；没有映射就显示原值
+    const nameOf = v => (labels.map && labels.map[v]) || v;
+    el.innerHTML = `<option value="">${labels.all}</option>` +
+      values.map(v => `<option value="${v}">${nameOf(v)}</option>`).join('');
+    el.value = values.includes(keep) ? keep : current;
+  };
+
+  fill($('filterKind'), filterOptions.kinds,
+    { all: '全部类型', map: KIND_LABELS }, filters.kind);
+  fill($('filterRating'), filterOptions.ratings,
+    { all: '全部分级', map: RATING_LABELS }, filters.rating);
+  fill($('filterTag'), filterOptions.tags,
+    { all: '全部标签' }, filters.tag);
+}
 
 async function loadProjects() {
   try {
-    const r = await fetch('/api/projects');
+    const params = new URLSearchParams();
+    if (filters.kind) params.set('kind', filters.kind);
+    if (filters.rating) params.set('rating', filters.rating);
+    if (filters.tag) params.set('tag', filters.tag);
+    if (filters.keyword) params.set('keyword', filters.keyword);
+
+    const r = await fetch('/api/projects?' + params.toString());
     const j = await r.json();
     const ps = j.projects || [];
     allProjects = ps;
-    $('count').textContent = `(${ps.length})`;
+    renderFilterOptions(j.filters);
+    $('count').textContent = `(${j.total != null ? j.total : ps.length})`;
     $('libEmpty').style.display = ps.length ? 'none' : 'block';
 
     // 清理已不存在的选中项
@@ -488,7 +815,13 @@ async function loadProjects() {
     const start = (page - 1) * pageSize;
     const slice = ps.slice(start, start + pageSize);
 
-    $('grid').innerHTML = slice.map(p => `
+    $('grid').innerHTML = slice.map(p => {
+      const meta = p.meta || {};
+      const badges = [];
+      if (meta.kind) badges.push(`<span class="badge kind">${meta.kind_label || meta.kind}</span>`);
+      if (meta.content_rating)
+        badges.push(`<span class="badge rating-${meta.content_rating}">${meta.content_rating_label || meta.content_rating}</span>`);
+      return `
       <div class="wall ${selected.has(p.id) ? 'sel' : ''}" data-id="${p.id}">
         <label class="pick" onclick="event.stopPropagation()">
           <input type="checkbox" ${selected.has(p.id) ? 'checked' : ''}
@@ -507,6 +840,10 @@ async function loadProjects() {
         </div>
         <div class="info">
           <div class="title" title="${p.title}">${p.title}</div>
+          <div class="meta">
+            ${badges.join(' ')}
+            ${meta.tags && meta.tags.length ? `<span class="badge kind">${meta.tags.slice(0, 3).join(' / ')}</span>` : ''}
+          </div>
           <div class="meta">${p.entry_count} 个条目 · ${p.source === 'scan' ? '目录扫描' : '上传'}</div>
           ${p.output_dir ? `<div class="meta path" title="${p.output_dir}">${p.output_dir}</div>` : ''}
         </div>
@@ -516,7 +853,8 @@ async function loadProjects() {
             ? `<button class="ghost" onclick="openOutDir('${p.id}')">📂 打开目录</button>`
             : ''}
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     renderPager(totalPages);
     updateSelUI();
@@ -592,7 +930,8 @@ function updateSelUI() {
   const n = selected.size;
   $('selCount').textContent = `已选 ${n} 个`;
   $('delBtn').disabled = n === 0;
-  const all = document.querySelectorAll('#grid .pick input');
+  // querySelectorAll 返回 NodeList，没有 every，要先转成数组
+  const all = Array.from(document.querySelectorAll('#grid .pick input'));
   const allChecked = all.length > 0 && all.every(cb => cb.checked);
   $('selAll').checked = allChecked;
 }
@@ -661,17 +1000,16 @@ async function doExtract(id) {
     fd.append('output_dir', '');
     const r = await fetch('/api/extract/' + id, { method: 'POST', body: fd });
     const j = await r.json();
-    $('libMsg').innerHTML = `<button class="close-result" onclick="closeResult()">✕</button>
-      <div class="msg ${j.ok ? 'ok' : 'err'}">
-      解包到 <code>${j.output_dir}</code><br>
-      文件 ${j.files_written} · 图片 ${j.images_written} · 媒体 ${j.media_count} · 跳过 ${j.skipped}
-      ${j.errors.length ? '<br>错误: ' + j.errors.join('; ') : ''}
-      ${j.media && j.media.length ? renderMedia(j.media) : ''}
-      ${j.log && j.log.length ? '<div class="log">' + j.log.join('\n') + '</div>' : ''}
-    </div>`;
-    $('libMsg').classList.add('sticky');
-    toast(j.ok ? `解包完成 · ${j.media_count} 个媒体` : '解包失败', j.ok ? 'ok' : 'err');
-    loadProjects();
+    if (!j.ok) {
+      $('libMsg').innerHTML = '<div class="msg err">解包启动失败</div>';
+      toast('解包启动失败', 'err');
+      return;
+    }
+    // 解包在后台执行，左侧栏显示进度
+    addTask(j.task_id, { name: j.output_dir ? j.output_dir.split(/[\\/]/).pop() : '' });
+    openRail('left');
+    toast('解包已开始，可在左侧栏查看进度', 'ok');
+    pollTask(j.task_id);
   } catch (e) {
     $('libMsg').innerHTML = '<div class="msg err">解包失败</div>';
     toast('解包失败', 'err');
@@ -683,6 +1021,180 @@ async function doExtract(id) {
 function closeResult() {
   $('libMsg').innerHTML = '';
   $('libMsg').classList.remove('sticky');
+}
+
+// ---------- 任务侧栏 ----------
+
+// taskId -> 任务状态
+const tasks = new Map();
+
+function toggleRail(side, open) {
+  const el = side === 'left' ? $('railLeft') : $('railRight');
+  el.classList.toggle('open', open);
+  syncRailBodyClass(side);
+  updateFabs();
+}
+
+function openRail(side) {
+  const el = side === 'left' ? $('railLeft') : $('railRight');
+  el.classList.add('open');
+  syncRailBodyClass(side);
+  updateFabs();
+}
+
+// 主内容让位（避免被侧栏盖住）
+function syncRailBodyClass(side) {
+  const cls = side === 'left' ? 'rail-left-open' : 'rail-right-open';
+  const el = side === 'left' ? $('railLeft') : $('railRight');
+  document.body.classList.toggle(cls, el.classList.contains('open'));
+}
+
+function updateFabs() {
+  const running = [...tasks.values()].filter(t => !t.finished).length;
+  const done = [...tasks.values()].filter(t => t.finished && t.status === 'done').length;
+
+  const leftOpen = $('railLeft').classList.contains('open');
+  const rightOpen = $('railRight').classList.contains('open');
+
+  $('fabLeft').classList.toggle('show', !leftOpen && running > 0);
+  $('fabLeftText').textContent = `解包中 ${running}`;
+
+  $('fabRight').classList.toggle('show', !rightOpen && done > 0);
+  $('fabRightText').textContent = `已完成 ${done}`;
+}
+
+function addTask(taskId, info = {}) {
+  tasks.set(taskId, {
+    id: taskId,
+    name: info.name || '解包任务',
+    status: 'running',
+    percent: 0,
+    current: 0,
+    total: 0,
+    current_entry: '',
+    error: '',
+    finished: false,
+  });
+  renderRails();
+}
+
+function renderRails() {
+  const all = [...tasks.values()];
+  const running = all.filter(t => !t.finished);
+  const finished = all.filter(t => t.finished).sort((a, b) => (b.finished_at || 0) - (a.finished_at || 0));
+
+  $('leftCount').textContent = running.length;
+  $('rightCount').textContent = finished.length;
+
+  // 左侧：进行中
+  $('railLeftBody').innerHTML = running.length
+    ? running.map(t => {
+        const pct = Math.max(0, Math.min(100, t.percent || 0));
+        return `<div class="task" data-task="${t.id}">
+          <div class="t-name" title="${t.name}">${t.name}</div>
+          <div class="t-bar"><i style="width:${pct}%"></i></div>
+          <div class="t-meta"><span>${t.current || 0} / ${t.total || '?'}</span><span>${pct}%</span></div>
+          ${t.current_entry ? `<div class="t-file" title="${t.current_entry}">${t.current_entry}</div>` : ''}
+          ${t.error ? `<div class="t-err">${t.error}</div>` : ''}
+        </div>`;
+      }).join('')
+    : '<div class="hist-empty">暂无进行中的任务</div>';
+
+  // 右侧：已完成（带下载 / 复制路径）
+  const lit = s => JSON.stringify(String(s));
+  $('railRightBody').innerHTML = finished.length
+    ? finished.map(t => {
+        const cls = t.status === 'done' ? 'done' : 'error';
+        const media = t.media || [];
+        const mediaRows = media.map(m => `
+          <div class="t-mrow">
+            <span class="t-mname" title="${m.name}">${m.name}</span>
+            <span class="t-mbtns">
+              <a class="mbtn dl" href="${m.url}" download="${m.name}" title="下载 ${m.name}"
+                 onclick="event.stopPropagation()">⬇ 下载</a>
+              <button class="mbtn cp" onclick="event.stopPropagation();copyPath(${lit(m.path)})"
+                      title="复制完整路径">📋 复制</button>
+            </span>
+          </div>`).join('');
+        return `<div class="task ${cls}" data-task="${t.id}" onclick="showTaskById('${t.id}')" style="cursor:pointer;">
+          <div class="t-name" title="${t.name}">${t.name}</div>
+          <div class="t-bar"><i style="width:100%"></i></div>
+          <div class="t-meta">
+            <span>${t.status === 'done'
+              ? `${t.files_written || 0} 文件 · ${t.media_count || 0} 媒体`
+              : '失败'}</span>
+            <span>${t.status === 'done' ? '完成' : '错误'}</span>
+          </div>
+          ${t.error ? `<div class="t-err">${t.error}</div>` : ''}
+          ${mediaRows ? `<div class="t-media">${mediaRows}</div>` : ''}
+        </div>`;
+      }).join('')
+    : '<div class="hist-empty">暂无已完成的解包</div>';
+
+  updateFabs();
+}
+
+async function pollTask(taskId) {
+  try {
+    const r = await fetch('/api/task/' + taskId);
+    const j = await r.json();
+    if (!j.ok) return;
+    const t = j.task;
+    tasks.set(taskId, { ...(tasks.get(taskId) || {}), ...t });
+    renderRails();
+
+    if (!t.finished) {
+      setTimeout(() => pollTask(taskId), 400);
+    } else {
+      onTaskDone(t);
+    }
+  } catch (e) {
+    setTimeout(() => pollTask(taskId), 1200);
+  }
+}
+
+function onTaskDone(t) {
+  if (t.status === 'done') {
+    toast(`解包完成 · ${t.media_count || 0} 个媒体`, 'ok');
+    // 右侧栏自动弹出，方便立刻找到刚解出来的东西
+    openRail('right');
+    // 结果面板也展示完整媒体网格（大图预览 + 下载/复制）
+    showTaskResult(t);
+  } else {
+    toast('解包失败: ' + (t.error || '未知错误'), 'err');
+  }
+  loadProjects();
+}
+
+// 展示某个已完成任务的完整结果
+function showTaskResult(t) {
+  const media = t.media || [];
+  $('libMsg').innerHTML = `<button class="close-result" onclick="closeResult()">✕</button>
+    <div class="msg ok">
+    解包到 <code>${t.output_dir || ''}</code><br>
+    文件 ${t.files_written || 0} · 图片 ${t.images_written || 0} · 媒体 ${t.media_count || 0}
+    ${media.length ? renderMedia(media) : ''}
+  </div>`;
+  $('libMsg').classList.add('sticky');
+}
+
+// 点击右侧栏的已完成任务，重新展示它的完整结果
+async function showTaskById(taskId) {
+  const t = tasks.get(taskId);
+  if (!t) return;
+  if (!t.media || !t.media.length) {
+    // 没有媒体信息时重新拉一次
+    try {
+      const r = await fetch('/api/task/' + taskId);
+      const j = await r.json();
+      if (j.ok) {
+        tasks.set(taskId, { ...t, ...j.task });
+        showTaskResult(j.task);
+        return;
+      }
+    } catch (e) { /* 忽略 */ }
+  }
+  showTaskResult(t);
 }
 
 // 在文件管理器中打开该工程的输出目录
@@ -701,9 +1213,10 @@ async function openOutDir(id) {
 }
 
 function renderMedia(media) {
+  const lit = s => JSON.stringify(String(s));
   const items = media.map(m => `
     <div class="media-item">
-      <div class="media-thumb" onclick="revealPath('${m.path}')" title="在文件管理器中查看">
+      <div class="media-thumb" onclick="revealPath(${lit(m.path)})" title="在文件管理器中查看">
         ${m.kind === 'video'
           ? `<video src="${m.url}" muted loop autoplay playsinline></video>`
           : `<img src="${m.url}" loading="lazy">`}
@@ -714,8 +1227,10 @@ function renderMedia(media) {
         <div class="media-size">${(m.size/1024).toFixed(1)} KB · ${m.extension.toUpperCase()}</div>
       </div>
       <div class="media-btns">
-        <a class="media-dl" href="${m.url}" download="${m.name}" title="下载">⬇</a>
-        <button class="media-copy" onclick="copyPath('${m.path}')" title="复制路径">📋</button>
+        <a class="media-dl" href="${m.url}" download="${m.name}"
+           title="下载 ${m.name}" onclick="event.stopPropagation()">⬇ 下载</a>
+        <button class="media-copy" onclick="copyPath(${lit(m.path)});event.stopPropagation()"
+                title="复制完整路径">📋 复制</button>
       </div>
     </div>`).join('');
   return `<div class="media-box">
@@ -776,6 +1291,7 @@ function toast(msg, kind) {
 }
 
 loadProjects();
+loadHistory();
 </script>
 </body>
 </html>

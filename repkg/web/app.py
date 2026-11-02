@@ -31,8 +31,11 @@ from ..core.extractor import (
     is_video_path,
     media_mime_type,
 )
+from ..core.history import add_directory, list_directories, remove_directory
+from ..core.metadata import RATING_ORDER, WallpaperMeta, read_meta
 from ..core.package import PackageReader
 from ..core.paths import resolve_out_dir
+from ..core.tasks import _tasks
 from ..core.tex import TexError, TexReader
 from .explorer import copy_to_clipboard, reveal_in_file_manager
 
@@ -58,6 +61,7 @@ class Project:
     project_json: dict[str, Any] = field(default_factory=dict)
     output_dir: Path | None = None      # 解包输出目录
     media: list[dict[str, Any]] = field(default_factory=list)   # 解出的图片/视频
+    meta: WallpaperMeta = field(default_factory=WallpaperMeta)  # 年龄分级/场景分类
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -74,6 +78,7 @@ class Project:
             "output_dir": str(self.output_dir) if self.output_dir else "",
             "extracted": self.is_extracted(),
             "media": self.media,
+            "meta": self.meta.to_dict(),
         }
 
     def is_extracted(self) -> bool:
@@ -181,6 +186,9 @@ def _register(pkg_path: Path, source: str, name: str | None = None) -> Project:
         except (json.JSONDecodeError, OSError):
             pass
 
+    # 提取年龄分级 / 场景分类等元数据
+    project.meta = read_meta(pkg_path)
+
     # 统计条目数
     try:
         package = _package_reader.read_file(pkg_path, read_entry_bytes=False)
@@ -261,8 +269,19 @@ async def scan(directory: str = Form(...), recursive: bool = Form(True)) -> JSON
         raise HTTPException(400, f"不是目录: {root}")
 
     packages = _extractor.scan_directory(root, recursive=recursive)
+    # 记入目录历史，方便下次直接选
+    add_directory(root, count=len(packages))
+
     if not packages:
-        return JSONResponse({"ok": True, "count": 0, "projects": [], "message": "该目录下没有 .pkg 文件"})
+        return JSONResponse(
+            {
+                "ok": True,
+                "count": 0,
+                "projects": [],
+                "message": "该目录下没有 .pkg 文件",
+                "history": list_directories(),
+            }
+        )
 
     projects = []
     for pkg_path in packages:
@@ -272,13 +291,89 @@ async def scan(directory: str = Form(...), recursive: bool = Form(True)) -> JSON
         except Exception as exc:
             print(f"注册失败 {pkg_path}: {exc}")
 
-    return JSONResponse({"ok": True, "count": len(projects), "projects": projects})
+    return JSONResponse(
+        {
+            "ok": True,
+            "count": len(projects),
+            "projects": projects,
+            "history": list_directories(),
+        }
+    )
+
+
+@app.get("/api/scan/history")
+async def scan_history() -> JSONResponse:
+    """返回扫描目录历史。"""
+    return JSONResponse({"ok": True, "history": list_directories()})
+
+
+@app.post("/api/scan/history/delete")
+async def delete_scan_history(path: str = Form(...)) -> JSONResponse:
+    """从历史中删除一条记录。"""
+    entries = remove_directory(path)
+    return JSONResponse({"ok": True, "history": entries})
+
+
+def _ordered(values: set[str], preferred: list[str]) -> list[str]:
+    """按偏好顺序排序，已知项在前，未知项按字母序在后。"""
+    known = [v for v in preferred if v in values]
+    rest = sorted(v for v in values if v not in preferred)
+    return known + rest
 
 
 @app.get("/api/projects")
-async def list_projects() -> JSONResponse:
-    """列出所有已注册的工程。"""
-    return JSONResponse({"ok": True, "projects": [p.to_dict() for p in _projects.values()]})
+async def list_projects(
+    kind: str | None = None,
+    rating: str | None = None,
+    tag: str | None = None,
+    keyword: str | None = None,
+) -> JSONResponse:
+    """列出所有已注册的工程（支持按分类筛选）。
+
+    Args:
+        kind: 工程类型 scene / wallpaper / video。
+        rating: 内容分级 Everyone / Teen / Adult。
+        tag: 作者标签。
+        keyword: 标题关键字。
+    """
+    projects = list(_projects.values())
+
+    def matched(p: Project) -> bool:
+        meta = p.meta
+        if kind and meta.kind != kind:
+            return False
+        if rating and meta.content_rating != rating:
+            return False
+        if tag and tag not in meta.tags:
+            return False
+        if keyword:
+            haystack = f"{p.name} {p.project_json.get('title', '')}".lower()
+            if keyword.lower() not in haystack:
+                return False
+        return True
+
+    filtered = [p for p in projects if matched(p)]
+
+    # 汇总可用的筛选项，方便前端渲染下拉框
+    # 按「已知顺序优先，未知在后」排序，保证下拉框顺序稳定可预期
+    kinds = _ordered(
+        {p.meta.kind for p in projects if p.meta.kind},
+        ["scene", "wallpaper", "video", "web"],
+    )
+    ratings = _ordered(
+        {p.meta.content_rating for p in projects if p.meta.content_rating},
+        RATING_ORDER,
+    )
+    tags = sorted({t for p in projects for t in p.meta.tags}, key=str.lower)
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "projects": [p.to_dict() for p in filtered],
+            "total": len(projects),
+            "filters": {"kinds": kinds, "ratings": ratings, "tags": tags},
+        }
+    )
 
 
 @app.get("/api/preview/{project_id}")
@@ -324,6 +419,38 @@ async def entries(project_id: str) -> JSONResponse:
     )
 
 
+def _task_payload(task) -> dict[str, Any]:
+    """任务的可序列化信息（含已解出的媒体清单）。
+
+    完成后把 media 挂到任务上，这样右侧「已完成」列表能直接显示
+    下载 / 复制路径按钮，不必再回查工程接口。
+    """
+    data = task.to_dict()
+
+    if task.finished and task.result is not None:
+        project = _projects.get(task.project_id)
+        if project is not None:
+            target = task.output_dir or (OUTPUT_DIR / project.name)
+            media = [
+                {
+                    "name": path.name,
+                    "kind": "video" if is_video_path(path) else "image",
+                    "extension": path.suffix.lstrip(".").lower(),
+                    "size": path.stat().st_size,
+                    "path": str(path),
+                    "url": f"/api/media/{project.id}/{path.name}",
+                }
+                for path in task.result.media_files
+                if path.exists()
+            ]
+            project.output_dir = target
+            project.media = media
+            data["media"] = media
+            data["media_count"] = len(media)
+
+    return data
+
+
 @app.post("/api/extract/{project_id}")
 async def extract(
     project_id: str,
@@ -332,7 +459,10 @@ async def extract(
     convert_tex: bool = Form(True),
     overwrite: bool = Form(False),
 ) -> JSONResponse:
-    """把工程解包到输出目录。"""
+    """启动解包任务（后台线程执行）。
+
+    立即返回 task_id，进度通过 GET /api/task/{task_id} 查询。
+    """
     project = _projects.get(project_id)
     if project is None:
         raise HTTPException(404, "工程不存在")
@@ -348,36 +478,41 @@ async def extract(
         collect_media=True,
     )
 
-    lines: list[str] = []
-    result = _extractor.extract_package(project.pkg_path, options, log=lines.append)
-
-    # 记录解出的媒体，供前端展示与下载
-    project.output_dir = target
-    project.media = [
-        {
-            "name": path.name,
-            "kind": "video" if is_video_path(path) else "image",
-            "extension": path.suffix.lstrip(".").lower(),
-            "size": path.stat().st_size,
-            "path": str(path),
-            "url": f"/api/media/{project_id}/{path.name}",
-        }
-        for path in result.media_files
-        if path.exists()
-    ]
-
+    task = _tasks.create(project_id, project.name, project.pkg_path, options)
     return JSONResponse(
         {
-            "ok": result.ok,
+            "ok": True,
+            "task_id": task.id,
             "output_dir": str(target),
-            "media_dir": str(target / "media"),
-            "files_written": len(result.files_written),
-            "images_written": len(result.images_written),
-            "media_count": len(project.media),
-            "media": project.media,
-            "skipped": len(result.skipped),
-            "errors": result.errors,
-            "log": lines[-200:],
+            "message": "解包任务已启动",
+        }
+    )
+
+
+@app.get("/api/task/{task_id}")
+async def task_status(task_id: str) -> JSONResponse:
+    """查询解包任务进度。"""
+    task = _tasks.get(task_id)
+    if task is None:
+        raise HTTPException(404, "任务不存在")
+
+    return JSONResponse({"ok": True, "task": _task_payload(task)})
+
+
+@app.get("/api/task/{task_id}/logs")
+async def task_logs(task_id: str, limit: int = 200) -> JSONResponse:
+    """获取任务日志。"""
+    return JSONResponse({"ok": True, "logs": _tasks.get_logs(task_id, limit)})
+
+
+@app.get("/api/tasks")
+async def active_tasks() -> JSONResponse:
+    """列出进行中（左侧栏）与已完成（右侧栏）的任务。"""
+    return JSONResponse(
+        {
+            "ok": True,
+            "running": [_task_payload(t) for t in _tasks.list_tasks()],
+            "finished": [_task_payload(t) for t in _tasks.list_finished()],
         }
     )
 

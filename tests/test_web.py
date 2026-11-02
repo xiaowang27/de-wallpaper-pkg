@@ -7,6 +7,7 @@ from __future__ import annotations
 import io
 import pathlib
 import struct
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -66,6 +67,25 @@ def _upload(client, pkg_bytes, name="scene.pkg") -> str:
     return r.json()["project"]["id"]
 
 
+def _extract(client, pid) -> dict:
+    """启动解包任务并等待完成，返回最终的任务状态。
+
+    解包改为后台线程执行（为了展示实时进度），
+    所以需要轮询 /api/task/{id} 直到结束。
+    """
+    r = client.post(f"/api/extract/{pid}", data={"output_dir": ""})
+    assert r.status_code == 200, r.text
+    task_id = r.json()["task_id"]
+
+    for _ in range(400):
+        tr = client.get(f"/api/task/{task_id}").json()["task"]
+        if tr["finished"]:
+            return tr
+        time.sleep(0.02)
+
+    raise AssertionError("解包任务超时未完成")
+
+
 # --------------------------------------------------------------------------
 # 删除
 # --------------------------------------------------------------------------
@@ -118,8 +138,8 @@ def test_delete_removes_extracted_files(client, pkg_bytes):
     """勾选删除文件时，解包产物应从磁盘移除。"""
     pid = _upload(client, pkg_bytes)
 
-    r = client.post(f"/api/extract/{pid}", data={"output_dir": ""})
-    out_dir = pathlib.Path(r.json()["output_dir"])
+    tr = _extract(client, pid)
+    out_dir = pathlib.Path(tr["output_dir"])
     assert out_dir.exists()
 
     r = client.post(
@@ -132,8 +152,8 @@ def test_delete_removes_extracted_files(client, pkg_bytes):
 def test_delete_keeps_files_when_not_requested(client, pkg_bytes):
     """不勾选删除文件时，只从列表移除，磁盘文件保留。"""
     pid = _upload(client, pkg_bytes)
-    r = client.post(f"/api/extract/{pid}", data={"output_dir": ""})
-    out_dir = pathlib.Path(r.json()["output_dir"])
+    tr = _extract(client, pid)
+    out_dir = pathlib.Path(tr["output_dir"])
 
     client.post("/api/projects/delete", data={"ids": pid, "delete_files": "false"})
     assert out_dir.exists()
@@ -166,7 +186,7 @@ def test_reveal_empty_path_returns_error(client):
 def test_reveal_by_project_id(client, pkg_bytes):
     """按 project_id 打开该工程的解包输出目录。"""
     pid = _upload(client, pkg_bytes)
-    client.post(f"/api/extract/{pid}", data={"output_dir": ""})
+    _extract(client, pid)
 
     r = client.post("/api/reveal", data={"path": "", "project_id": pid})
     assert r.status_code == 200
@@ -195,7 +215,7 @@ def test_projects_expose_extracted_flag(client, pkg_bytes):
     assert "extracted" in proj
     assert proj["extracted"] is False
 
-    client.post(f"/api/extract/{pid}", data={"output_dir": ""})
+    _extract(client, pid)
 
     r = client.get("/api/projects")
     proj = next(p for p in r.json()["projects"] if p["id"] == pid)
@@ -211,8 +231,8 @@ def test_copy_to_clipboard(client):
 def test_media_download_and_listing(client, pkg_bytes):
     """解包后媒体可下载，且带 attachment 头。"""
     pid = _upload(client, pkg_bytes)
-    r = client.post(f"/api/extract/{pid}", data={"output_dir": ""})
-    media = r.json()["media"]
+    tr = _extract(client, pid)
+    media = tr["media"]
     assert len(media) == 1
 
     # media 项应带上绝对路径（供「在文件夹中显示」使用）
@@ -226,7 +246,7 @@ def test_media_download_and_listing(client, pkg_bytes):
 def test_media_path_traversal_rejected(client, pkg_bytes):
     """媒体下载接口不允许跳出 media/ 目录。"""
     pid = _upload(client, pkg_bytes)
-    client.post(f"/api/extract/{pid}", data={"output_dir": ""})
+    _extract(client, pid)
 
     r = client.get(f"/api/media/{pid}/..%2F..%2Fapp.py")
     assert r.status_code in (400, 404)

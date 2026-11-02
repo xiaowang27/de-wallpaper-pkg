@@ -102,12 +102,22 @@ def main() -> int:
     ok &= r.status_code == 200 and img.size == (32, 16)
 
     # 3) 解包 + 媒体下载
+    # 解包已改为后台任务（为了展示实时进度），需要轮询任务状态
     r = httpx.post(f"{BASE}/api/extract/{pid}", data={"output_dir": ""}, timeout=30)
-    j = r.json()
-    print(f"✓ 解包: ok={j['ok']} images={j['images_written']} media={j['media_count']}")
-    ok &= j["ok"] and j["media_count"] == 1
+    task_id = r.json()["task_id"]
 
-    r = httpx.get(f"{BASE}{j['media'][0]['url']}", timeout=10)
+    task = {}
+    for _ in range(300):
+        task = httpx.get(f"{BASE}/api/task/{task_id}", timeout=10).json()["task"]
+        if task["finished"]:
+            break
+        time.sleep(0.05)
+
+    print(f"✓ 解包: status={task['status']} images={task.get('images_written')} "
+          f"media={task.get('media_count')}")
+    ok &= task["status"] == "done" and task.get("media_count") == 1
+
+    r = httpx.get(f"{BASE}{task['media'][0]['url']}", timeout=10)
     print(f"✓ 媒体下载: {r.status_code} {len(r.content)} 字节 "
           f"disposition={r.headers.get('content-disposition')}")
     ok &= r.status_code == 200 and len(r.content) > 0
