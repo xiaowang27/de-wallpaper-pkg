@@ -11,6 +11,9 @@ Wallpaper Engine **PKG / TEX** 格式的 Python 解析与解包工具。
 > （MIT License）的格式研究成果实现，遵循 MIT 协议。
 > 详见 [LICENSE](LICENSE) 与 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)。
 
+> **规划中的功能**（页面配置路径、自动扫描新增壁纸、自动上传云盘）
+> 见 [docs/ROADMAP.md](docs/ROADMAP.md)。
+
 ---
 
 ## 快速开始
@@ -75,7 +78,8 @@ repkg-py/
 │   ├── web_check.py           真实 uvicorn + 真实 HTTP 冒烟测试
 │   └── ui_check.py            真实 Chrome 无头模式 UI 验证
 ├── docs/
-│   └── STARTUP.md             启动方式详解（PyCharm / 命令行 / 作为库）
+│   ├── STARTUP.md             启动方式详解（PyCharm / 命令行 / 作为库）
+│   └── ROADMAP.md             路线图与待实现想法（页面配置 / 自动扫描 / 云端上传）
 ├── .idea/runConfigurations/    PyCharm 共享运行配置（Web Server / Tests）
 ├── pyproject.toml
 └── requirements.txt
